@@ -3,20 +3,17 @@ package com.brazucacms.service.integration;
 import com.brazucacms.dto.integration.IntegrationConnectRequest;
 import com.brazucacms.exception.IntegrationException;
 import com.brazucacms.model.Company;
-import com.brazucacms.model.Entry;
 import com.brazucacms.model.Integration;
 import com.brazucacms.repository.IntegrationRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.parser.OpenAPIV3Parser;
-import io.swagger.v3.parser.core.models.ParseOptions;
-import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -26,7 +23,7 @@ import java.util.regex.Pattern;
 /**
  * OpenAPI Integration Service
  * Handles:
- * - OpenAPI/Swagger spec parsing
+ * - OpenAPI/Swagger spec parsing (using Jackson)
  * - Documentation generation from specs
  * - Auto-sync with GitHub repos
  * - Live API documentation updates
@@ -38,6 +35,7 @@ public class OpenAPIIntegrationService {
 
     private final IntegrationRepository integrationRepository;
     private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
     // ============ Connection ============
@@ -49,13 +47,13 @@ public class OpenAPIIntegrationService {
             String specContent = request.getCredentials().get("specContent");
             
             // Parse and validate spec
-            OpenAPI openAPI;
+            JsonNode openAPISpec;
             if (specUrl != null && !specUrl.isEmpty()) {
-                openAPI = parseSpecFromUrl(specUrl);
+                openAPISpec = parseSpecFromUrl(specUrl);
             } else if (specContent != null && !specContent.isEmpty()) {
-                openAPI = parseSpecFromContent(specContent);
+                openAPISpec = parseSpecFromContent(specContent);
             } else {
-                throw new IntegrationException("Either specUrl or specContent is required");
+                throw new IntegrationException("OPENAPI", "INVALID_CONFIG", "Either specUrl or specContent is required");
             }
             
             Integration integration = integrationRepository
@@ -66,24 +64,35 @@ public class OpenAPIIntegrationService {
             company.setId(companyId);
             integration.setCompany(company);
             integration.setPlatform(Integration.Platform.OPENAPI);
-            integration.setDisplayName(openAPI.getInfo().getTitle());
+            
+            JsonNode info = openAPISpec.get("info");
+            String title = info != null && info.has("title") ? info.get("title").asText() : "OpenAPI Spec";
+            String version = info != null && info.has("version") ? info.get("version").asText() : "1.0.0";
+            String description = info != null && info.has("description") ? info.get("description").asText() : "";
+            
+            integration.setDisplayName(title);
             integration.setStatus(Integration.IntegrationStatus.ACTIVE);
             integration.setLastSyncAt(LocalDateTime.now());
             integration.setLastSyncStatus("Spec parsed successfully");
             
+            JsonNode paths = openAPISpec.get("paths");
+            int pathCount = paths != null ? paths.size() : 0;
+            
             Map<String, Object> config = new HashMap<>();
             config.put("specUrl", specUrl);
-            config.put("title", openAPI.getInfo().getTitle());
-            config.put("version", openAPI.getInfo().getVersion());
-            config.put("description", openAPI.getInfo().getDescription());
-            config.put("pathCount", openAPI.getPaths() != null ? openAPI.getPaths().size() : 0);
+            config.put("title", title);
+            config.put("version", version);
+            config.put("description", description);
+            config.put("pathCount", pathCount);
             integration.setConfiguration(objectMapper.writeValueAsString(config));
 
             return integrationRepository.save(integration);
             
+        } catch (IntegrationException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to connect OpenAPI: {}", e.getMessage());
-            throw new IntegrationException("Failed to parse OpenAPI spec: " + e.getMessage());
+            throw new IntegrationException("OPENAPI", "CONNECTION_FAILED", "Failed to parse OpenAPI spec: " + e.getMessage());
         }
     }
 
@@ -92,33 +101,37 @@ public class OpenAPIIntegrationService {
     /**
      * Parse OpenAPI spec from URL
      */
-    public OpenAPI parseSpecFromUrl(String url) {
-        ParseOptions options = new ParseOptions();
-        options.setResolve(true);
-        
-        SwaggerParseResult result = new OpenAPIV3Parser().readLocation(url, null, options);
-        
-        if (result.getOpenAPI() == null) {
-            throw new IntegrationException("Failed to parse OpenAPI spec: " + String.join(", ", result.getMessages()));
+    public JsonNode parseSpecFromUrl(String url) {
+        try {
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            String content = response.getBody();
+            
+            if (content == null || content.isEmpty()) {
+                throw new IntegrationException("OPENAPI", "EMPTY_SPEC", "Empty spec from URL");
+            }
+            
+            return parseSpecFromContent(content);
+        } catch (IntegrationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IntegrationException("OPENAPI", "URL_FETCH_FAILED", "Failed to fetch spec from URL: " + e.getMessage());
         }
-        
-        return result.getOpenAPI();
     }
 
     /**
      * Parse OpenAPI spec from content string (JSON or YAML)
      */
-    public OpenAPI parseSpecFromContent(String content) {
-        ParseOptions options = new ParseOptions();
-        options.setResolve(true);
-        
-        SwaggerParseResult result = new OpenAPIV3Parser().readContents(content, null, options);
-        
-        if (result.getOpenAPI() == null) {
-            throw new IntegrationException("Failed to parse OpenAPI spec: " + String.join(", ", result.getMessages()));
+    public JsonNode parseSpecFromContent(String content) {
+        try {
+            // Try JSON first
+            if (content.trim().startsWith("{")) {
+                return objectMapper.readTree(content);
+            }
+            // Try YAML
+            return yamlMapper.readTree(content);
+        } catch (Exception e) {
+            throw new IntegrationException("OPENAPI", "PARSE_FAILED", "Failed to parse spec: " + e.getMessage());
         }
-        
-        return result.getOpenAPI();
     }
 
     // ============ Documentation Generation ============
@@ -126,23 +139,30 @@ public class OpenAPIIntegrationService {
     /**
      * Generate markdown documentation from OpenAPI spec
      */
-    public String generateMarkdownDocs(OpenAPI openAPI) {
+    public String generateMarkdownDocs(JsonNode openAPISpec) {
         StringBuilder md = new StringBuilder();
         
+        JsonNode info = openAPISpec.get("info");
+        
         // Title and description
-        md.append("# ").append(openAPI.getInfo().getTitle()).append("\n\n");
-        if (openAPI.getInfo().getDescription() != null) {
-            md.append(openAPI.getInfo().getDescription()).append("\n\n");
+        String title = info != null && info.has("title") ? info.get("title").asText() : "API Documentation";
+        md.append("# ").append(title).append("\n\n");
+        
+        if (info != null && info.has("description")) {
+            md.append(info.get("description").asText()).append("\n\n");
         }
-        md.append("**Version:** ").append(openAPI.getInfo().getVersion()).append("\n\n");
+        
+        String version = info != null && info.has("version") ? info.get("version").asText() : "1.0.0";
+        md.append("**Version:** ").append(version).append("\n\n");
         
         // Servers
-        if (openAPI.getServers() != null && !openAPI.getServers().isEmpty()) {
+        JsonNode servers = openAPISpec.get("servers");
+        if (servers != null && servers.isArray() && servers.size() > 0) {
             md.append("## Servers\n\n");
-            for (var server : openAPI.getServers()) {
-                md.append("- `").append(server.getUrl()).append("`");
-                if (server.getDescription() != null) {
-                    md.append(" - ").append(server.getDescription());
+            for (JsonNode server : servers) {
+                md.append("- `").append(server.get("url").asText()).append("`");
+                if (server.has("description")) {
+                    md.append(" - ").append(server.get("description").asText());
                 }
                 md.append("\n");
             }
@@ -150,22 +170,38 @@ public class OpenAPIIntegrationService {
         }
         
         // Endpoints
-        if (openAPI.getPaths() != null) {
+        JsonNode paths = openAPISpec.get("paths");
+        if (paths != null) {
             md.append("## Endpoints\n\n");
             
             // Group by tags
             Map<String, List<EndpointInfo>> endpointsByTag = new LinkedHashMap<>();
             
-            openAPI.getPaths().forEach((path, pathItem) -> {
-                pathItem.readOperationsMap().forEach((method, operation) -> {
-                    String tag = operation.getTags() != null && !operation.getTags().isEmpty() 
-                        ? operation.getTags().get(0) 
-                        : "Default";
+            Iterator<String> pathIterator = paths.fieldNames();
+            while (pathIterator.hasNext()) {
+                String path = pathIterator.next();
+                JsonNode pathItem = paths.get(path);
+                
+                Iterator<String> methodIterator = pathItem.fieldNames();
+                while (methodIterator.hasNext()) {
+                    String method = methodIterator.next();
+                    if (method.equals("parameters") || method.equals("servers") || method.equals("$ref")) {
+                        continue;
+                    }
+                    
+                    JsonNode operation = pathItem.get(method);
+                    String tag = "Default";
+                    if (operation.has("tags") && operation.get("tags").isArray() && operation.get("tags").size() > 0) {
+                        tag = operation.get("tags").get(0).asText();
+                    }
+                    
+                    String summary = operation.has("summary") ? operation.get("summary").asText() : "";
+                    String pathDescription = operation.has("description") ? operation.get("description").asText() : "";
                     
                     endpointsByTag.computeIfAbsent(tag, k -> new ArrayList<>())
-                        .add(new EndpointInfo(method.name(), path, operation.getSummary(), operation.getDescription()));
-                });
-            });
+                        .add(new EndpointInfo(method.toUpperCase(), path, summary, pathDescription));
+                }
+            }
             
             endpointsByTag.forEach((tag, endpoints) -> {
                 md.append("### ").append(tag).append("\n\n");
@@ -200,33 +236,54 @@ public class OpenAPIIntegrationService {
     /**
      * Generate detailed endpoint documentation
      */
-    public List<Map<String, Object>> generateEndpointDocs(OpenAPI openAPI) {
+    public List<Map<String, Object>> generateEndpointDocs(JsonNode openAPISpec) {
         List<Map<String, Object>> endpoints = new ArrayList<>();
         
-        if (openAPI.getPaths() == null) return endpoints;
+        JsonNode paths = openAPISpec.get("paths");
+        if (paths == null) return endpoints;
         
-        openAPI.getPaths().forEach((path, pathItem) -> {
-            pathItem.readOperationsMap().forEach((method, operation) -> {
+        Iterator<String> pathIterator = paths.fieldNames();
+        while (pathIterator.hasNext()) {
+            String path = pathIterator.next();
+            JsonNode pathItem = paths.get(path);
+            
+            Iterator<String> methodIterator = pathItem.fieldNames();
+            while (methodIterator.hasNext()) {
+                String method = methodIterator.next();
+                if (method.equals("parameters") || method.equals("servers") || method.equals("$ref")) {
+                    continue;
+                }
+                
+                JsonNode operation = pathItem.get(method);
+                
                 Map<String, Object> endpoint = new HashMap<>();
-                endpoint.put("method", method.name());
+                endpoint.put("method", method.toUpperCase());
                 endpoint.put("path", path);
-                endpoint.put("operationId", operation.getOperationId());
-                endpoint.put("summary", operation.getSummary());
-                endpoint.put("description", operation.getDescription());
-                endpoint.put("tags", operation.getTags());
-                endpoint.put("deprecated", operation.getDeprecated() != null && operation.getDeprecated());
+                endpoint.put("operationId", operation.has("operationId") ? operation.get("operationId").asText() : null);
+                endpoint.put("summary", operation.has("summary") ? operation.get("summary").asText() : null);
+                endpoint.put("description", operation.has("description") ? operation.get("description").asText() : null);
+                
+                if (operation.has("tags") && operation.get("tags").isArray()) {
+                    List<String> tags = new ArrayList<>();
+                    for (JsonNode tag : operation.get("tags")) {
+                        tags.add(tag.asText());
+                    }
+                    endpoint.put("tags", tags);
+                }
+                
+                endpoint.put("deprecated", operation.has("deprecated") && operation.get("deprecated").asBoolean());
                 
                 // Parameters
-                if (operation.getParameters() != null) {
+                if (operation.has("parameters") && operation.get("parameters").isArray()) {
                     List<Map<String, Object>> params = new ArrayList<>();
-                    for (var param : operation.getParameters()) {
+                    for (JsonNode param : operation.get("parameters")) {
                         Map<String, Object> p = new HashMap<>();
-                        p.put("name", param.getName());
-                        p.put("in", param.getIn());
-                        p.put("required", param.getRequired());
-                        p.put("description", param.getDescription());
-                        if (param.getSchema() != null) {
-                            p.put("type", param.getSchema().getType());
+                        p.put("name", param.has("name") ? param.get("name").asText() : null);
+                        p.put("in", param.has("in") ? param.get("in").asText() : null);
+                        p.put("required", param.has("required") && param.get("required").asBoolean());
+                        p.put("description", param.has("description") ? param.get("description").asText() : null);
+                        if (param.has("schema") && param.get("schema").has("type")) {
+                            p.put("type", param.get("schema").get("type").asText());
                         }
                         params.add(p);
                     }
@@ -234,24 +291,31 @@ public class OpenAPIIntegrationService {
                 }
                 
                 // Request body
-                if (operation.getRequestBody() != null) {
+                if (operation.has("requestBody")) {
+                    JsonNode requestBody = operation.get("requestBody");
                     Map<String, Object> body = new HashMap<>();
-                    body.put("description", operation.getRequestBody().getDescription());
-                    body.put("required", operation.getRequestBody().getRequired());
-                    if (operation.getRequestBody().getContent() != null) {
-                        body.put("contentTypes", operation.getRequestBody().getContent().keySet());
+                    body.put("description", requestBody.has("description") ? requestBody.get("description").asText() : null);
+                    body.put("required", requestBody.has("required") && requestBody.get("required").asBoolean());
+                    if (requestBody.has("content")) {
+                        List<String> contentTypes = new ArrayList<>();
+                        requestBody.get("content").fieldNames().forEachRemaining(contentTypes::add);
+                        body.put("contentTypes", contentTypes);
                     }
                     endpoint.put("requestBody", body);
                 }
                 
                 // Responses
-                if (operation.getResponses() != null) {
+                if (operation.has("responses")) {
                     Map<String, Object> responses = new HashMap<>();
-                    operation.getResponses().forEach((code, response) -> {
+                    JsonNode responsesNode = operation.get("responses");
+                    responsesNode.fieldNames().forEachRemaining(code -> {
+                        JsonNode response = responsesNode.get(code);
                         Map<String, Object> r = new HashMap<>();
-                        r.put("description", response.getDescription());
-                        if (response.getContent() != null) {
-                            r.put("contentTypes", response.getContent().keySet());
+                        r.put("description", response.has("description") ? response.get("description").asText() : null);
+                        if (response.has("content")) {
+                            List<String> contentTypes = new ArrayList<>();
+                            response.get("content").fieldNames().forEachRemaining(contentTypes::add);
+                            r.put("contentTypes", contentTypes);
                         }
                         responses.put(code, r);
                     });
@@ -259,8 +323,8 @@ public class OpenAPIIntegrationService {
                 }
                 
                 endpoints.add(endpoint);
-            });
-        });
+            }
+        }
         
         return endpoints;
     }
@@ -333,7 +397,7 @@ public class OpenAPIIntegrationService {
     @Transactional
     public Map<String, Object> syncSpec(Long integrationId) {
         Integration integration = integrationRepository.findById(integrationId)
-                .orElseThrow(() -> new IntegrationException("Integration not found"));
+                .orElseThrow(() -> new IntegrationException("OPENAPI", "NOT_FOUND", "Integration not found"));
         
         Map<String, Object> result = new HashMap<>();
         
@@ -342,31 +406,41 @@ public class OpenAPIIntegrationService {
             String specUrl = config.has("specUrl") ? config.get("specUrl").asText() : null;
             
             if (specUrl == null || specUrl.isEmpty()) {
-                throw new IntegrationException("No spec URL configured");
+                throw new IntegrationException("OPENAPI", "NO_URL", "No spec URL configured");
             }
             
-            OpenAPI openAPI = parseSpecFromUrl(specUrl);
+            JsonNode openAPISpec = parseSpecFromUrl(specUrl);
+            
+            JsonNode info = openAPISpec.get("info");
+            String title = info != null && info.has("title") ? info.get("title").asText() : "API";
+            String version = info != null && info.has("version") ? info.get("version").asText() : "1.0.0";
+            String desc = info != null && info.has("description") ? info.get("description").asText() : "";
+            
+            JsonNode paths = openAPISpec.get("paths");
+            int pathCount = paths != null ? paths.size() : 0;
             
             // Update config with new info
             Map<String, Object> newConfig = new HashMap<>();
             newConfig.put("specUrl", specUrl);
-            newConfig.put("title", openAPI.getInfo().getTitle());
-            newConfig.put("version", openAPI.getInfo().getVersion());
-            newConfig.put("description", openAPI.getInfo().getDescription());
-            newConfig.put("pathCount", openAPI.getPaths() != null ? openAPI.getPaths().size() : 0);
+            newConfig.put("title", title);
+            newConfig.put("version", version);
+            newConfig.put("description", desc);
+            newConfig.put("pathCount", pathCount);
             integration.setConfiguration(objectMapper.writeValueAsString(newConfig));
             
             integration.setLastSyncAt(LocalDateTime.now());
-            integration.setLastSyncStatus("Synced: " + openAPI.getPaths().size() + " endpoints");
+            integration.setLastSyncStatus("Synced: " + pathCount + " endpoints");
             integrationRepository.save(integration);
             
             result.put("success", true);
-            result.put("title", openAPI.getInfo().getTitle());
-            result.put("version", openAPI.getInfo().getVersion());
-            result.put("endpointCount", openAPI.getPaths() != null ? openAPI.getPaths().size() : 0);
-            result.put("markdown", generateMarkdownDocs(openAPI));
-            result.put("endpoints", generateEndpointDocs(openAPI));
+            result.put("title", title);
+            result.put("version", version);
+            result.put("endpointCount", pathCount);
+            result.put("markdown", generateMarkdownDocs(openAPISpec));
+            result.put("endpoints", generateEndpointDocs(openAPISpec));
             
+        } catch (IntegrationException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to sync OpenAPI spec: {}", e.getMessage());
             integration.setLastSyncStatus("Error: " + e.getMessage());

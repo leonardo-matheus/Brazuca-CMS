@@ -12,8 +12,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -43,12 +41,7 @@ public class IntegrationController {
 
     // Integration services
     private final GitHubIntegrationService gitHubService;
-    private final ShopifyIntegrationService shopifyService;
-    private final KlaviyoIntegrationService klaviyoService;
     private final OpenAPIIntegrationService openAPIService;
-    private final StripeIntegrationService stripeService;
-    private final Auth0IntegrationService auth0Service;
-    private final WooCommerceIntegrationService wooCommerceService;
     private final AutomationEngineService automationEngine;
 
     // ============ Platform Discovery ============
@@ -146,28 +139,6 @@ public class IntegrationController {
         return ResponseEntity.ok(ApiResponse.success(Map.of("url", url)));
     }
 
-    @GetMapping("/oauth/shopify")
-    @Operation(summary = "Get Shopify OAuth URL")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getShopifyOAuthUrl(
-            @RequestParam String shopDomain,
-            @RequestParam String redirectUri,
-            @RequestParam(required = false, defaultValue = "") String state
-    ) {
-        String url = shopifyService.getOAuthUrl(shopDomain, redirectUri, state);
-        return ResponseEntity.ok(ApiResponse.success(Map.of("url", url)));
-    }
-
-    @GetMapping("/oauth/auth0")
-    @Operation(summary = "Get Auth0 OAuth URL")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getAuth0OAuthUrl(
-            @RequestParam(required = false) String domain,
-            @RequestParam String redirectUri,
-            @RequestParam(required = false, defaultValue = "") String state
-    ) {
-        String url = auth0Service.getOAuthUrl(domain, redirectUri, state);
-        return ResponseEntity.ok(ApiResponse.success(Map.of("url", url)));
-    }
-
     // ============ Connect Integrations ============
 
     @PostMapping("/connect")
@@ -186,34 +157,11 @@ public class IntegrationController {
             case GITHUB:
                 integration = gitHubService.connectWithOAuth(companyId, user.getId(), request);
                 break;
-            case SHOPIFY:
-                if (request.getApiKey() != null) {
-                    integration = shopifyService.connectWithApiKey(companyId, user.getId(), request);
-                } else {
-                    integration = shopifyService.connectWithOAuth(companyId, user.getId(), request);
-                }
-                break;
-            case WOOCOMMERCE:
-                integration = wooCommerceService.connectWithApiKey(companyId, user.getId(), request);
-                break;
-            case KLAVIYO:
-                integration = klaviyoService.connectWithApiKey(companyId, user.getId(), request);
-                break;
             case OPENAPI:
                 integration = openAPIService.connectWithUrl(companyId, user.getId(), request);
                 break;
-            case STRIPE:
-                integration = stripeService.connectWithApiKey(companyId, user.getId(), request);
-                break;
-            case AUTH0:
-                if (request.getCode() != null) {
-                    integration = auth0Service.connectWithOAuth(companyId, user.getId(), request);
-                } else {
-                    integration = auth0Service.connectWithCredentials(companyId, user.getId(), request);
-                }
-                break;
             default:
-                throw new RuntimeException("Platform not supported: " + platform);
+                throw new RuntimeException("Platform not yet implemented: " + platform);
         }
         
         return ResponseEntity.ok(ApiResponse.success(
@@ -239,14 +187,10 @@ public class IntegrationController {
         Map<String, Object> result;
         
         switch (integration.getPlatform()) {
-            case SHOPIFY:
-                result = shopifyService.syncProducts(id);
-                break;
             case OPENAPI:
                 result = openAPIService.syncSpec(id);
                 break;
             case GITHUB:
-                // Would need repo info from config
                 result = Map.of("message", "Use specific sync endpoint with repo details");
                 break;
             default:
@@ -270,40 +214,6 @@ public class IntegrationController {
         
         List<Map<String, Object>> repos = gitHubService.listRepositories(integration.getAccessToken());
         return ResponseEntity.ok(ApiResponse.success(repos));
-    }
-
-    @GetMapping("/shopify/{integrationId}/products")
-    @Operation(summary = "List Shopify products")
-    public ResponseEntity<ApiResponse<Page<SyncedProductResponse>>> listShopifyProducts(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable Long integrationId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
-    ) {
-        var user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
-        Long companyId = user.getCompany().getId();
-        
-        Page<SyncedProductResponse> products = productRepository
-                .findByCompanyIdAndPlatform(companyId, Integration.Platform.SHOPIFY, PageRequest.of(page, size))
-                .map(SyncedProductResponse::fromEntity);
-        
-        return ResponseEntity.ok(ApiResponse.success(products));
-    }
-
-    @GetMapping("/klaviyo/{integrationId}/lists")
-    @Operation(summary = "List Klaviyo lists")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> listKlaviyoLists(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable Long integrationId
-    ) {
-        var user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
-        Long companyId = user.getCompany().getId();
-        
-        Integration integration = integrationRepository.findByIdAndCompanyId(integrationId, companyId)
-                .orElseThrow(() -> new RuntimeException("Integration not found"));
-        
-        List<Map<String, Object>> lists = klaviyoService.getLists(integration.getAccessToken());
-        return ResponseEntity.ok(ApiResponse.success(lists));
     }
 
     // ============ Automation Workflows ============
@@ -453,24 +363,6 @@ public class IntegrationController {
     ) {
         log.info("Received GitHub webhook: {}", event);
         Map<String, Object> result = gitHubService.processWebhook(event, signature, payload);
-        
-        // Trigger automations
-        // Would need to map webhook to integration and trigger workflows
-        
-        return ResponseEntity.ok(result);
-    }
-
-    @PostMapping("/webhooks/shopify")
-    @Operation(summary = "Shopify webhook endpoint")
-    public ResponseEntity<Map<String, Object>> handleShopifyWebhook(
-            @RequestHeader("X-Shopify-Topic") String topic,
-            @RequestHeader("X-Shopify-Shop-Domain") String shopDomain,
-            @RequestHeader(value = "X-Shopify-Hmac-Sha256", required = false) String hmac,
-            @RequestBody String payload
-    ) {
-        log.info("Received Shopify webhook: {} from {}", topic, shopDomain);
-        Map<String, Object> result = shopifyService.processWebhook(topic, shopDomain, payload);
-        
         return ResponseEntity.ok(result);
     }
 
