@@ -179,6 +179,12 @@ public class Company {
     private String settings;
 
     /**
+     * ID do cliente no Stripe para faturamento
+     */
+    @Column(name = "stripe_customer_id")
+    private String stripeCustomerId;
+
+    /**
      * Usuários vinculados a esta empresa
      */
     @OneToMany(mappedBy = "company", cascade = CascadeType.ALL)

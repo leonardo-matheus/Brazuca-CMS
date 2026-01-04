@@ -49,6 +49,17 @@ jwt:
   expiration: 86400000 # 24 hours in milliseconds
   refresh-expiration: 604800000 # 7 days in milliseconds
 
+# Stripe Configuration
+stripe:
+  api-key: ${STRIPE_API_KEY:sk_test_your_test_key_here}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_your_webhook_secret_here}
+  prices:
+    starter: ${STRIPE_PRICE_STARTER:price_starter_free}
+    pro-monthly: ${STRIPE_PRICE_PRO_MONTHLY:price_pro_monthly}
+    pro-yearly: ${STRIPE_PRICE_PRO_YEARLY:price_pro_yearly}
+    enterprise-monthly: ${STRIPE_PRICE_ENTERPRISE_MONTHLY:price_enterprise_monthly}
+    enterprise-yearly: ${STRIPE_PRICE_ENTERPRISE_YEARLY:price_enterprise_yearly}
+
 # Application Configuration
 app:
   cors:

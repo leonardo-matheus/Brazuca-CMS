@@ -19,6 +19,7 @@ import {
   Crown,
   Tag,
   Webhook,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth, useAuthStore } from '@/stores/auth.store';
 
@@ -69,6 +70,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const settingsLinks: SidebarLink[] = [
     { href: '/dashboard/settings/webhooks', icon: Webhook, label: 'Webhooks' },
+    { href: '/dashboard/billing', icon: CreditCard, label: 'Faturamento' },
     { href: '/dashboard/settings', icon: Settings, label: 'Configurações' },
   ];
 

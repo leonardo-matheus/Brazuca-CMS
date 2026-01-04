@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -53,6 +54,7 @@ public class DataInitializer {
     private final SettingsRepository settingsRepository;
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMemberRepository workspaceMemberRepository;
+    private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final PasswordEncoder passwordEncoder;
 
     /**
@@ -75,6 +77,9 @@ public class DataInitializer {
             
             // 3. Criar configurações padrão do sistema
             createDefaultSettings();
+            
+            // 4. Criar planos de assinatura
+            createSubscriptionPlans();
             
             log.info("╔══════════════════════════════════════════════════════════════╗");
             log.info("║       Dados de teste criados com sucesso!                    ║");
@@ -529,5 +534,95 @@ public class DataInitializer {
         log.info("║    API Base:    http://localhost:8080/api                        ║");
         log.info("║                                                                  ║");
         log.info("╚══════════════════════════════════════════════════════════════════╝");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // PLANOS DE ASSINATURA
+    // ═══════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Cria os planos de assinatura padrão.
+     */
+    private void createSubscriptionPlans() {
+        if (subscriptionPlanRepository.existsByName("starter")) {
+            log.info("→ Planos de assinatura já existem, pulando...");
+            return;
+        }
+
+        log.info("");
+        log.info("━━━ Criando Planos de Assinatura ━━━");
+
+        // Plano Starter (Gratuito)
+        subscriptionPlanRepository.save(SubscriptionPlan.builder()
+                .name("starter")
+                .displayName("Starter")
+                .description("Perfeito para projetos pessoais e pequenos sites.")
+                .priceMonthly(BigDecimal.ZERO)
+                .priceYearly(BigDecimal.ZERO)
+                .maxProjects(1)
+                .maxUsers(3)
+                .maxApiRequests(10000L)
+                .maxStorageMb(1024L) // 1GB
+                .maxWebhooks(5)
+                .hasGraphql(false)
+                .hasWebhooks(true)
+                .hasPrioritySupport(false)
+                .hasSso(false)
+                .hasCustomDomain(false)
+                .hasAdvancedAnalytics(false)
+                .sortOrder(1)
+                .active(true)
+                .build());
+        log.info("  ✓ Plano Starter criado (Gratuito)");
+
+        // Plano Pro
+        subscriptionPlanRepository.save(SubscriptionPlan.builder()
+                .name("pro")
+                .displayName("Pro")
+                .description("Ideal para equipes e projetos em crescimento.")
+                .priceMonthly(new BigDecimal("99.00"))
+                .priceYearly(new BigDecimal("990.00"))
+                .stripePriceIdMonthly("price_pro_monthly") // Substitua pelo ID real do Stripe
+                .stripePriceIdYearly("price_pro_yearly")   // Substitua pelo ID real do Stripe
+                .maxProjects(5)
+                .maxUsers(10)
+                .maxApiRequests(100000L)
+                .maxStorageMb(25600L) // 25GB
+                .maxWebhooks(-1) // ilimitado
+                .hasGraphql(true)
+                .hasWebhooks(true)
+                .hasPrioritySupport(true)
+                .hasSso(false)
+                .hasCustomDomain(true)
+                .hasAdvancedAnalytics(true)
+                .sortOrder(2)
+                .active(true)
+                .build());
+        log.info("  ✓ Plano Pro criado (R$ 99/mês)");
+
+        // Plano Enterprise
+        subscriptionPlanRepository.save(SubscriptionPlan.builder()
+                .name("enterprise")
+                .displayName("Enterprise")
+                .description("Para grandes organizações com necessidades avançadas.")
+                .priceMonthly(new BigDecimal("499.00"))
+                .priceYearly(new BigDecimal("4990.00"))
+                .stripePriceIdMonthly("price_enterprise_monthly") // Substitua pelo ID real do Stripe
+                .stripePriceIdYearly("price_enterprise_yearly")   // Substitua pelo ID real do Stripe
+                .maxProjects(-1) // ilimitado
+                .maxUsers(-1)    // ilimitado
+                .maxApiRequests(-1L) // ilimitado
+                .maxStorageMb(-1L)   // ilimitado
+                .maxWebhooks(-1)     // ilimitado
+                .hasGraphql(true)
+                .hasWebhooks(true)
+                .hasPrioritySupport(true)
+                .hasSso(true)
+                .hasCustomDomain(true)
+                .hasAdvancedAnalytics(true)
+                .sortOrder(3)
+                .active(true)
+                .build());
+        log.info("  ✓ Plano Enterprise criado (R$ 499/mês)");
     }
 }

@@ -46,6 +46,8 @@ public class SecurityConfig {
                         // Public endpoints
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/refresh").permitAll()
                         .requestMatchers("/api/settings/public").permitAll()
+                        .requestMatchers("/api/billing/webhook").permitAll()
+                        .requestMatchers("/api/billing/plans").permitAll()
                         
                         // Swagger/OpenAPI
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
