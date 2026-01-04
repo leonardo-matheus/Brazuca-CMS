@@ -1,4 +1,4 @@
-import { api } from '@/lib/api';
+import { apiClient, ApiResponse } from '@/lib/api';
 
 // ============ Types ============
 
@@ -93,16 +93,17 @@ const ENDPOINTS = {
  * Get all available subscription plans
  */
 export async function getPlans(): Promise<SubscriptionPlan[]> {
-  const response = await api.get<{ data: SubscriptionPlan[] }>(ENDPOINTS.PLANS);
-  return response.data;
+  const response = await apiClient.get<ApiResponse<SubscriptionPlan[]>>(ENDPOINTS.PLANS);
+  return response.data.data || [];
 }
 
 /**
  * Get a specific plan by ID
  */
 export async function getPlan(id: number): Promise<SubscriptionPlan> {
-  const response = await api.get<{ data: SubscriptionPlan }>(ENDPOINTS.PLAN(id));
-  return response.data;
+  const response = await apiClient.get<ApiResponse<SubscriptionPlan>>(ENDPOINTS.PLAN(id));
+  if (!response.data.data) throw new Error('Plan not found');
+  return response.data.data;
 }
 
 /**
@@ -110,8 +111,8 @@ export async function getPlan(id: number): Promise<SubscriptionPlan> {
  */
 export async function getSubscription(): Promise<Subscription | null> {
   try {
-    const response = await api.get<{ data: Subscription }>(ENDPOINTS.SUBSCRIPTION);
-    return response.data;
+    const response = await apiClient.get<ApiResponse<Subscription>>(ENDPOINTS.SUBSCRIPTION);
+    return response.data.data || null;
   } catch (error: any) {
     if (error?.status === 404) {
       return null;
@@ -124,8 +125,9 @@ export async function getSubscription(): Promise<Subscription | null> {
  * Create a checkout session for a new subscription
  */
 export async function createCheckoutSession(data: CreateCheckoutRequest): Promise<CheckoutSession> {
-  const response = await api.post<{ data: CheckoutSession }>(ENDPOINTS.CHECKOUT, data);
-  return response.data;
+  const response = await apiClient.post<ApiResponse<CheckoutSession>>(ENDPOINTS.CHECKOUT, data);
+  if (!response.data.data) throw new Error('Failed to create checkout session');
+  return response.data.data;
 }
 
 /**
@@ -133,8 +135,9 @@ export async function createCheckoutSession(data: CreateCheckoutRequest): Promis
  */
 export async function createBillingPortalSession(returnUrl?: string): Promise<PortalSession> {
   const url = returnUrl ? `${ENDPOINTS.PORTAL}?returnUrl=${encodeURIComponent(returnUrl)}` : ENDPOINTS.PORTAL;
-  const response = await api.post<{ data: PortalSession }>(url);
-  return response.data;
+  const response = await apiClient.post<ApiResponse<PortalSession>>(url);
+  if (!response.data.data) throw new Error('Failed to create portal session');
+  return response.data.data;
 }
 
 /**
@@ -142,24 +145,26 @@ export async function createBillingPortalSession(returnUrl?: string): Promise<Po
  */
 export async function cancelSubscription(immediate: boolean = false): Promise<Subscription> {
   const url = `${ENDPOINTS.CANCEL_SUBSCRIPTION}?immediate=${immediate}`;
-  const response = await api.post<{ data: Subscription }>(url);
-  return response.data;
+  const response = await apiClient.post<ApiResponse<Subscription>>(url);
+  if (!response.data.data) throw new Error('Failed to cancel subscription');
+  return response.data.data;
 }
 
 /**
  * Reactivate a canceled subscription
  */
 export async function reactivateSubscription(): Promise<Subscription> {
-  const response = await api.post<{ data: Subscription }>(ENDPOINTS.REACTIVATE_SUBSCRIPTION);
-  return response.data;
+  const response = await apiClient.post<ApiResponse<Subscription>>(ENDPOINTS.REACTIVATE_SUBSCRIPTION);
+  if (!response.data.data) throw new Error('Failed to reactivate subscription');
+  return response.data.data;
 }
 
 /**
  * Get all invoices
  */
 export async function getInvoices(): Promise<Invoice[]> {
-  const response = await api.get<{ data: Invoice[] }>(ENDPOINTS.INVOICES);
-  return response.data;
+  const response = await apiClient.get<ApiResponse<Invoice[]>>(ENDPOINTS.INVOICES);
+  return response.data.data || [];
 }
 
 // ============ Utility Functions ============

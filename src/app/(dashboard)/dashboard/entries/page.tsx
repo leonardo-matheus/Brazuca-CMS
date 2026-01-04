@@ -27,6 +27,7 @@ import {
   Send,
   Loader2,
   MoreHorizontal,
+  Instagram,
 } from 'lucide-react';
 import { Button, Card, CardContent, Input, Badge, Avatar } from '@/components/ui';
 import { entriesService, EntriesFilters, EntryVersion } from '@/services/entries.service';
@@ -35,6 +36,7 @@ import { ContentEntry, ContentType } from '@/types';
 import { toast } from '@/stores/toast.store';
 import { cn } from '@/lib/utils';
 import { EntryModal } from '@/components/modals/EntryModal';
+import PublishToInstagramModal from '@/components/modals/PublishToInstagramModal';
 
 const statusConfig = {
   draft: { label: 'Rascunho', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
@@ -70,6 +72,9 @@ export default function EntriesPage() {
   const [versionsModal, setVersionsModal] = useState<{ entryId: string; title: string } | null>(null);
   const [versions, setVersions] = useState<EntryVersion[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
+  
+  // Instagram publish modal
+  const [instagramModal, setInstagramModal] = useState<ContentEntry | null>(null);
 
   useEffect(() => {
     fetchContentTypes();
@@ -648,6 +653,18 @@ export default function EntriesPage() {
                                     Ver Versões
                                   </button>
                                   
+                                  {/* Instagram Publish */}
+                                  <button
+                                    onClick={() => {
+                                      setInstagramModal(entry);
+                                      setActionMenuId(null);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+                                  >
+                                    <Instagram className="w-4 h-4 text-pink-500" />
+                                    Publicar no Instagram
+                                  </button>
+                                  
                                   <div className="border-t dark:border-gray-700 my-1" />
                                   
                                   <button
@@ -872,6 +889,16 @@ export default function EntriesPage() {
           }}
         />
       )}
+      
+      {/* Instagram Publish Modal */}
+      <PublishToInstagramModal
+        isOpen={!!instagramModal}
+        onClose={() => setInstagramModal(null)}
+        entryId={instagramModal?.id ? parseInt(instagramModal.id) : 0}
+        entryTitle={instagramModal?.title || ''}
+        entryDescription={instagramModal?.data?.description || instagramModal?.data?.excerpt || ''}
+        entryImageUrl={instagramModal?.data?.image || instagramModal?.data?.coverImage || instagramModal?.data?.featuredImage || ''}
+      />
     </div>
   );
 }

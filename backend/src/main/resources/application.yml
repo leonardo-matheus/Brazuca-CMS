@@ -60,6 +60,44 @@ stripe:
     enterprise-monthly: ${STRIPE_PRICE_ENTERPRISE_MONTHLY:price_enterprise_monthly}
     enterprise-yearly: ${STRIPE_PRICE_ENTERPRISE_YEARLY:price_enterprise_yearly}
 
+# Instagram/Meta API Configuration
+instagram:
+  app-id: ${INSTAGRAM_APP_ID:your_meta_app_id}
+  app-secret: ${INSTAGRAM_APP_SECRET:your_meta_app_secret}
+  redirect-uri: ${INSTAGRAM_REDIRECT_URI:http://localhost:3000/dashboard/settings/social/callback}
+  api-version: v18.0
+
+# Integration Configurations
+integration:
+  # GitHub
+  github:
+    client-id: ${GITHUB_CLIENT_ID:your_github_client_id}
+    client-secret: ${GITHUB_CLIENT_SECRET:your_github_client_secret}
+    webhook-secret: ${GITHUB_WEBHOOK_SECRET:your_webhook_secret}
+  
+  # Shopify
+  shopify:
+    client-id: ${SHOPIFY_CLIENT_ID:your_shopify_client_id}
+    client-secret: ${SHOPIFY_CLIENT_SECRET:your_shopify_client_secret}
+    scopes: read_products,write_products,read_orders,read_customers,read_inventory
+  
+  # Klaviyo
+  klaviyo:
+    api-key: ${KLAVIYO_API_KEY:your_klaviyo_api_key}
+  
+  # Stripe (Integration service)
+  stripe:
+    secret-key: ${STRIPE_SECRET_KEY:sk_test_your_key}
+    publishable-key: ${STRIPE_PUBLISHABLE_KEY:pk_test_your_key}
+    webhook-secret: ${STRIPE_INTEGRATION_WEBHOOK_SECRET:whsec_your_secret}
+  
+  # Auth0
+  auth0:
+    domain: ${AUTH0_DOMAIN:your-tenant.auth0.com}
+    client-id: ${AUTH0_CLIENT_ID:your_auth0_client_id}
+    client-secret: ${AUTH0_CLIENT_SECRET:your_auth0_client_secret}
+    audience: ${AUTH0_AUDIENCE:https://your-api.com}
+
 # Application Configuration
 app:
   cors:
