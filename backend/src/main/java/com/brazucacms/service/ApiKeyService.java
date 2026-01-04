@@ -30,14 +30,14 @@ public class ApiKeyService {
     // API Usage statistics
     public ApiUsageResponse getApiUsage(Long workspaceId) {
         List<ApiKey> keys = apiKeyRepository.findByWorkspaceId(workspaceId);
-        long totalRequests = keys.stream().mapToLong(ApiKey::getRequestsThisMonth).sum();
-        long requestsToday = keys.stream().mapToLong(ApiKey::getRequestsToday).sum();
+        long totalRequests = keys.stream().mapToLong(ApiKey::getRequestCount).sum();
+        long lastMonthRequests = keys.stream().mapToLong(ApiKey::getLastMonthRequests).sum();
         
         return ApiUsageResponse.builder()
                 .totalRequests(totalRequests)
                 .rateLimit(1000)
-                .rateLimitRemaining(1000 - (int) requestsToday)
-                .requestsThisMonth(totalRequests)
+                .rateLimitRemaining(Math.max(0, 1000 - (int) (totalRequests % 1000)))
+                .requestsThisMonth(lastMonthRequests)
                 .monthlyLimit(100000)
                 .build();
     }
