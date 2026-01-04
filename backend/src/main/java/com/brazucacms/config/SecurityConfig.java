@@ -79,7 +79,11 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(java.util.Arrays.asList(
                 "http://localhost:3000",
                 "http://localhost:3001",
-                "http://127.0.0.1:3000"
+                "http://127.0.0.1:3000",
+                "http://191.235.32.212",
+                "https://191.235.32.212",
+                "http://191-235-32-212.nip.io",
+                "https://191-235-32-212.nip.io"
         ));
         configuration.setAllowedMethods(java.util.Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(java.util.Arrays.asList(
