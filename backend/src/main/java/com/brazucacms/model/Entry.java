@@ -7,7 +7,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "entries", uniqueConstraints = {
@@ -63,6 +65,24 @@ public class Entry {
     @OneToMany(mappedBy = "entry", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<EntryHistory> history = new ArrayList<>();
+
+    @ManyToMany
+    @JoinTable(
+        name = "entry_categories",
+        joinColumns = @JoinColumn(name = "entry_id"),
+        inverseJoinColumns = @JoinColumn(name = "category_id")
+    )
+    @Builder.Default
+    private Set<Category> categories = new HashSet<>();
+
+    @ManyToMany
+    @JoinTable(
+        name = "entry_tags",
+        joinColumns = @JoinColumn(name = "entry_id"),
+        inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    @Builder.Default
+    private Set<Tag> tags = new HashSet<>();
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
