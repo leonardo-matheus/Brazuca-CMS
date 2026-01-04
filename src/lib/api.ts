@@ -2,10 +2,26 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 
 // =============================================
 // API Configuration - Direct Backend Integration
-// Backend: Spring Boot at http://localhost:8080
+// In production: uses relative URL (Nginx proxy)
+// In development: uses localhost:8080
 // =============================================
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const getApiBaseUrl = () => {
+  // Se NEXT_PUBLIC_API_URL está definida, use ela
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // Em produção (browser), usar URL relativa para o Nginx fazer proxy
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return ''; // URL relativa - Nginx vai fazer proxy de /api para localhost:8080
+  }
+  
+  // Em desenvolvimento local
+  return 'http://localhost:8080';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Debug flag - set to true for detailed logging
 const DEBUG_MODE = true;
