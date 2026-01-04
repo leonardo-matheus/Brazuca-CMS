@@ -117,7 +117,7 @@ public class StripeService {
     // ============ Billing Portal ============
 
     public PortalSessionResponse createBillingPortalSession(Long companyId, String returnUrl) throws StripeException {
-        Subscription subscription = subscriptionRepository.findByCompanyId(companyId)
+        com.brazucacms.model.Subscription subscription = subscriptionRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("No subscription found for this company"));
 
         if (subscription.getStripeCustomerId() == null) {
@@ -141,25 +141,25 @@ public class StripeService {
     // ============ Subscription Management ============
 
     public SubscriptionResponse getCurrentSubscription(Long companyId) {
-        Subscription subscription = subscriptionRepository.findByCompanyId(companyId)
+        com.brazucacms.model.Subscription subscription = subscriptionRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("No subscription found for this company"));
         return SubscriptionResponse.fromEntity(subscription);
     }
 
     public SubscriptionResponse getActiveSubscription(Long companyId) {
-        Subscription subscription = subscriptionRepository.findActiveByCompanyId(companyId)
+        com.brazucacms.model.Subscription subscription = subscriptionRepository.findActiveByCompanyId(companyId)
                 .orElse(null);
         return subscription != null ? SubscriptionResponse.fromEntity(subscription) : null;
     }
 
     @Transactional
     public SubscriptionResponse cancelSubscription(Long companyId, boolean immediate) throws StripeException {
-        Subscription subscription = subscriptionRepository.findActiveByCompanyId(companyId)
+        com.brazucacms.model.Subscription subscription = subscriptionRepository.findActiveByCompanyId(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("No active subscription found"));
 
         if (subscription.getStripeSubscriptionId() == null) {
             // Free plan - just mark as canceled
-            subscription.setStatus(Subscription.SubscriptionStatus.CANCELED);
+            subscription.setStatus(com.brazucacms.model.Subscription.SubscriptionStatus.CANCELED);
             subscription.setCanceledAt(LocalDateTime.now());
             subscription = subscriptionRepository.save(subscription);
             return SubscriptionResponse.fromEntity(subscription);
@@ -169,7 +169,7 @@ public class StripeService {
 
         if (immediate) {
             stripeSub.cancel();
-            subscription.setStatus(Subscription.SubscriptionStatus.CANCELED);
+            subscription.setStatus(com.brazucacms.model.Subscription.SubscriptionStatus.CANCELED);
             subscription.setCanceledAt(LocalDateTime.now());
         } else {
             SubscriptionUpdateParams params = SubscriptionUpdateParams.builder()
@@ -185,7 +185,7 @@ public class StripeService {
 
     @Transactional
     public SubscriptionResponse reactivateSubscription(Long companyId) throws StripeException {
-        Subscription subscription = subscriptionRepository.findByCompanyId(companyId)
+        com.brazucacms.model.Subscription subscription = subscriptionRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("No subscription found"));
 
         if (!subscription.getCancelAtPeriodEnd()) {
@@ -304,17 +304,17 @@ public class StripeService {
         }
 
         // Determine billing interval
-        Subscription.BillingInterval interval = Subscription.BillingInterval.MONTHLY;
+        com.brazucacms.model.Subscription.BillingInterval interval = com.brazucacms.model.Subscription.BillingInterval.MONTHLY;
         if (!stripeSub.getItems().getData().isEmpty()) {
             String priceInterval = stripeSub.getItems().getData().get(0).getPrice().getRecurring().getInterval();
             if ("year".equals(priceInterval)) {
-                interval = Subscription.BillingInterval.YEARLY;
+                interval = com.brazucacms.model.Subscription.BillingInterval.YEARLY;
             }
         }
 
         // Create or update subscription
-        Subscription subscription = subscriptionRepository.findByCompanyId(companyId)
-                .orElse(new Subscription());
+        com.brazucacms.model.Subscription subscription = subscriptionRepository.findByCompanyId(companyId)
+                .orElse(new com.brazucacms.model.Subscription());
 
         subscription.setCompany(company);
         subscription.setPlan(plan);
@@ -360,7 +360,7 @@ public class StripeService {
                 .getObject().orElseThrow();
 
         subscriptionRepository.findByStripeSubscriptionId(stripeSub.getId()).ifPresent(subscription -> {
-            subscription.setStatus(Subscription.SubscriptionStatus.CANCELED);
+            subscription.setStatus(com.brazucacms.model.Subscription.SubscriptionStatus.CANCELED);
             subscription.setCanceledAt(LocalDateTime.now());
             subscriptionRepository.save(subscription);
             log.info("Subscription canceled: {}", stripeSub.getId());
@@ -371,7 +371,7 @@ public class StripeService {
         com.stripe.model.Invoice stripeInvoice = (com.stripe.model.Invoice) event.getDataObjectDeserializer()
                 .getObject().orElseThrow();
 
-        Subscription subscription = subscriptionRepository.findByStripeCustomerId(stripeInvoice.getCustomer())
+        com.brazucacms.model.Subscription subscription = subscriptionRepository.findByStripeCustomerId(stripeInvoice.getCustomer())
                 .orElse(null);
 
         if (subscription == null) {
@@ -379,15 +379,15 @@ public class StripeService {
             return;
         }
 
-        Invoice invoice = invoiceRepository.findByStripeInvoiceId(stripeInvoice.getId())
-                .orElse(new Invoice());
+        com.brazucacms.model.Invoice invoice = invoiceRepository.findByStripeInvoiceId(stripeInvoice.getId())
+                .orElse(new com.brazucacms.model.Invoice());
 
         invoice.setCompany(subscription.getCompany());
         invoice.setSubscription(subscription);
         invoice.setStripeInvoiceId(stripeInvoice.getId());
         invoice.setStripePaymentIntentId(stripeInvoice.getPaymentIntent());
         invoice.setInvoiceNumber(stripeInvoice.getNumber());
-        invoice.setStatus(Invoice.InvoiceStatus.PAID);
+        invoice.setStatus(com.brazucacms.model.Invoice.InvoiceStatus.PAID);
         invoice.setSubtotal(BigDecimal.valueOf(stripeInvoice.getSubtotal()).divide(BigDecimal.valueOf(100)));
         invoice.setTax(stripeInvoice.getTax() != null 
                 ? BigDecimal.valueOf(stripeInvoice.getTax()).divide(BigDecimal.valueOf(100)) 
@@ -409,7 +409,7 @@ public class StripeService {
                 .getObject().orElseThrow();
 
         subscriptionRepository.findByStripeCustomerId(stripeInvoice.getCustomer()).ifPresent(subscription -> {
-            subscription.setStatus(Subscription.SubscriptionStatus.PAST_DUE);
+            subscription.setStatus(com.brazucacms.model.Subscription.SubscriptionStatus.PAST_DUE);
             subscriptionRepository.save(subscription);
             log.warn("Invoice payment failed for subscription: {}", subscription.getStripeSubscriptionId());
         });
