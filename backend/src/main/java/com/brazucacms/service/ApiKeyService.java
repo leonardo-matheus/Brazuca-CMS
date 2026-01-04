@@ -2,6 +2,7 @@ package com.brazucacms.service;
 
 import com.brazucacms.dto.apikey.ApiKeyRequest;
 import com.brazucacms.dto.apikey.ApiKeyResponse;
+import com.brazucacms.dto.apikey.ApiUsageResponse;
 import com.brazucacms.exception.ResourceNotFoundException;
 import com.brazucacms.model.ApiKey;
 import com.brazucacms.model.User;
@@ -25,6 +26,21 @@ public class ApiKeyService {
     private final ApiKeyRepository apiKeyRepository;
     private final WorkspaceRepository workspaceRepository;
     private static final SecureRandom secureRandom = new SecureRandom();
+
+    // API Usage statistics
+    public ApiUsageResponse getApiUsage(Long workspaceId) {
+        List<ApiKey> keys = apiKeyRepository.findByWorkspaceId(workspaceId);
+        long totalRequests = keys.stream().mapToLong(ApiKey::getRequestsThisMonth).sum();
+        long requestsToday = keys.stream().mapToLong(ApiKey::getRequestsToday).sum();
+        
+        return ApiUsageResponse.builder()
+                .totalRequests(totalRequests)
+                .rateLimit(1000)
+                .rateLimitRemaining(1000 - (int) requestsToday)
+                .requestsThisMonth(totalRequests)
+                .monthlyLimit(100000)
+                .build();
+    }
 
     // Workspace-scoped methods
     public List<ApiKeyResponse> getApiKeysByWorkspace(Long workspaceId) {

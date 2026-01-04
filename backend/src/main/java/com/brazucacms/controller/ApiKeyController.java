@@ -2,6 +2,7 @@ package com.brazucacms.controller;
 
 import com.brazucacms.dto.apikey.ApiKeyRequest;
 import com.brazucacms.dto.apikey.ApiKeyResponse;
+import com.brazucacms.dto.apikey.ApiUsageResponse;
 import com.brazucacms.dto.common.ApiResponse;
 import com.brazucacms.model.User;
 import com.brazucacms.service.ApiKeyService;
@@ -102,6 +103,17 @@ public class ApiKeyController {
         validateWorkspaceAdminAccess(workspaceId, userDetails);
         ApiKeyResponse response = apiKeyService.regenerateApiKey(id);
         return ResponseEntity.ok(ApiResponse.success("API key regenerated successfully. Please save the new key.", response));
+    }
+
+    @GetMapping("/usage")
+    @Operation(summary = "Get API usage statistics")
+    public ResponseEntity<ApiResponse<ApiUsageResponse>> getApiUsage(
+            @PathVariable Long workspaceId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        
+        validateWorkspaceAdminAccess(workspaceId, userDetails);
+        ApiUsageResponse response = apiKeyService.getApiUsage(workspaceId);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @DeleteMapping("/{id}")

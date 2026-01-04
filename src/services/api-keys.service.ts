@@ -131,10 +131,14 @@ export async function generateApiKey(data: {
 }): Promise<{ apiKey: ApiKeyStats; fullKey: string }> {
   try {
     const workspaceId = await getWorkspaceId();
+    
+    // Map frontend type to backend type
+    const backendType = data.type === 'secret' ? 'FULL_ACCESS' : 'READ_ONLY';
+    
     const response = await apiClient.post<ApiResponse<{ apiKey: ApiKeyResponse; fullKey: string }>>(ENDPOINTS.CREATE(workspaceId), {
       name: data.name,
-      type: data.type,
-      permissions: data.permissions,
+      type: backendType,
+      permissions: JSON.stringify(data.permissions), // Backend expects JSON string
     });
     
     return {
