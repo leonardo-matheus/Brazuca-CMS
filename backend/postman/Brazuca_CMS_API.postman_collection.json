@@ -1,0 +1,1479 @@
+{
+	"info": {
+		"_postman_id": "brazuca-cms-api-v2",
+		"name": "🇧🇷 Brazuca CMS API v2.0",
+		"description": "Coleção completa da API do Brazuca CMS - Headless CMS SaaS Multi-Tenant\n\n## 🚀 Como usar\n\n1. Importe esta coleção no Postman\n2. Configure as variáveis de ambiente (já configuradas para localhost)\n3. Execute primeiro o endpoint de Login para obter o token\n4. O token será salvo automaticamente nas variáveis\n\n## 🔑 Autenticação com Remember Me\n\n- `rememberMe: false` → Token expira em 1 dia\n- `rememberMe: true` → Token expira em 30 dias\n\n## 👥 Usuários de Teste\n\n### SUPER ADMIN (Dono do Sistema)\n| Email | Senha | Role |\n|-------|-------|------|\n| admin@brazucacms.com | admin123 | SUPER_ADMIN |\n\n### Tech Solutions Ltda (Empresa 1)\n| Email | Senha | Role |\n|-------|-------|------|\n| carlos@techsolutions.com | carlos123 | COMPANY_OWNER |\n| maria@techsolutions.com | maria123 | ADMIN |\n| joao@techsolutions.com | joao123 | USER |\n\n### Agência Digital ABC (Empresa 2)\n| Email | Senha | Role |\n|-------|-------|------|\n| stefani@agenciaabc.com | stefani123 | COMPANY_OWNER |\n| pedro@agenciaabc.com | pedro123 | USER |",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refreshToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "workspaceId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "companyId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "apiKey",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{accessToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "🔐 Authentication",
+			"description": "Endpoints de autenticação JWT com suporte a Remember Me",
+			"item": [
+				{
+					"name": "Login - Super Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+									"        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
+									"        console.log('✓ Tokens salvos! Role: ' + jsonData.data.user.role);",
+									"    }",
+									"}",
+									"",
+									"pm.test('Login realizado com sucesso', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.accessToken).to.not.be.undefined;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@brazucacms.com\",\n    \"password\": \"admin123\",\n    \"rememberMe\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login do Super Administrador (dono do sistema).\nPode gerenciar empresas e ver estatísticas globais.\n\n**rememberMe:**\n- `false` → Token expira em 1 dia\n- `true` → Token expira em 30 dias"
+					}
+				},
+				{
+					"name": "Login - Super Admin (Remember Me)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+									"        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
+									"        console.log('✓ Tokens salvos com Remember Me! Expira em 30 dias');",
+									"    }",
+									"}",
+									"",
+									"pm.test('Login com Remember Me', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@brazucacms.com\",\n    \"password\": \"admin123\",\n    \"rememberMe\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login com Remember Me ativado.\nO token JWT terá validade de 30 dias em vez de 1 dia."
+					}
+				},
+				{
+					"name": "Login - Company Owner (Tech Solutions)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+									"        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
+									"        console.log('✓ Tokens salvos! Company: Tech Solutions');",
+									"    }",
+									"}",
+									"",
+									"pm.test('Login Company Owner', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"carlos@techsolutions.com\",\n    \"password\": \"carlos123\",\n    \"rememberMe\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login do dono da empresa Tech Solutions.\nRole: COMPANY_OWNER - pode gerenciar usuários da empresa."
+					}
+				},
+				{
+					"name": "Login - Company Owner (Agência ABC)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+									"        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
+									"        console.log('✓ Tokens salvos! Company: Agência ABC');",
+									"    }",
+									"}",
+									"",
+									"pm.test('Login Company Owner', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"stefani@agenciaabc.com\",\n    \"password\": \"stefani123\",\n    \"rememberMe\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login da dona da empresa Agência ABC.\nRole: COMPANY_OWNER"
+					}
+				},
+				{
+					"name": "Login - Admin (Maria)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+									"        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
+									"    }",
+									"}",
+									"",
+									"pm.test('Login Admin', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"maria@techsolutions.com\",\n    \"password\": \"maria123\",\n    \"rememberMe\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login da admin Maria da Tech Solutions.\nRole: ADMIN"
+					}
+				},
+				{
+					"name": "Login - User (João)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+									"        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
+									"    }",
+									"}",
+									"",
+									"pm.test('Login User', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"joao@techsolutions.com\",\n    \"password\": \"joao123\",\n    \"rememberMe\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login do usuário João da Tech Solutions.\nRole: USER"
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+									"        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
+									"        console.log('✓ Tokens renovados!');",
+									"    }",
+									"}",
+									"",
+									"pm.test('Tokens renovados', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/refresh",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "refresh"]
+						},
+						"description": "Renova os tokens JWT usando o refresh token.\nMantém a configuração de rememberMe do login original."
+					}
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/me",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "me"]
+						},
+						"description": "Retorna informações do usuário autenticado."
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/logout",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "logout"]
+						},
+						"description": "Encerra a sessão do usuário."
+					}
+				}
+			]
+		},
+		{
+			"name": "🏢 Companies (SUPER_ADMIN)",
+			"description": "Gerenciamento de empresas - Apenas SUPER_ADMIN",
+			"item": [
+				{
+					"name": "List All Companies",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies?page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies"],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Lista todas as empresas cadastradas no sistema.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Get Company by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}"]
+						},
+						"description": "Busca empresa pelo ID.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Get Company by Slug",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/slug/tech-solutions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "slug", "tech-solutions"]
+						},
+						"description": "Busca empresa pelo slug.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Search Companies",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/search?query=tech&page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "search"],
+							"query": [
+								{
+									"key": "query",
+									"value": "tech"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Busca empresas por nome ou email.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Create Company (Without Owner)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set('companyId', jsonData.data.id);",
+									"        console.log('✓ Company criada! ID: ' + jsonData.data.id);",
+									"    }",
+									"}",
+									"",
+									"pm.test('Company criada', function () {",
+									"    pm.response.to.have.status(201);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Nova Empresa Ltda\",\n    \"description\": \"Descrição da nova empresa\",\n    \"cnpj\": \"11.222.333/0001-44\",\n    \"contactEmail\": \"contato@novaempresa.com\",\n    \"contactPhone\": \"(11) 1111-2222\",\n    \"websiteUrl\": \"https://novaempresa.com.br\",\n    \"address\": \"Rua Exemplo, 100\",\n    \"city\": \"São Paulo\",\n    \"state\": \"SP\",\n    \"country\": \"Brasil\",\n    \"zipCode\": \"01000-000\",\n    \"plan\": \"STARTER\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/companies",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies"]
+						},
+						"description": "Cria nova empresa sem criar owner automaticamente.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Create Company (With Owner)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set('companyId', jsonData.data.id);",
+									"        console.log('✓ Company criada com owner! ID: ' + jsonData.data.id);",
+									"    }",
+									"}",
+									"",
+									"pm.test('Company criada com owner', function () {",
+									"    pm.response.to.have.status(201);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Empresa com Owner\",\n    \"description\": \"Empresa criada automaticamente com dono\",\n    \"cnpj\": \"55.666.777/0001-88\",\n    \"contactEmail\": \"admin@empresaowner.com\",\n    \"contactPhone\": \"(21) 3333-4444\",\n    \"city\": \"Rio de Janeiro\",\n    \"state\": \"RJ\",\n    \"country\": \"Brasil\",\n    \"plan\": \"PROFESSIONAL\",\n    \"ownerName\": \"Roberto Dono\",\n    \"ownerEmail\": \"roberto@empresaowner.com\",\n    \"ownerPassword\": \"roberto123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/companies",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies"]
+						},
+						"description": "Cria nova empresa E cria automaticamente o usuário owner.\n**Requer:** SUPER_ADMIN\n\nO owner será criado com:\n- Role: COMPANY_OWNER\n- Vinculado à empresa criada"
+					}
+				},
+				{
+					"name": "Update Company",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Tech Solutions Atualizada\",\n    \"description\": \"Descrição atualizada\",\n    \"contactPhone\": \"(11) 9999-0000\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}"]
+						},
+						"description": "Atualiza dados da empresa.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Update Company Plan",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"plan\": \"ENTERPRISE\",\n    \"planValidUntil\": \"2025-12-31T23:59:59\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}/plan",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}", "plan"]
+						},
+						"description": "Atualiza o plano da empresa.\n**Requer:** SUPER_ADMIN\n\n**Planos disponíveis:**\n- FREE (5 users, 3 workspaces, 1GB)\n- STARTER (10 users, 10 workspaces, 5GB)\n- PROFESSIONAL (50 users, 50 workspaces, 50GB)\n- ENTERPRISE (unlimited)"
+					}
+				},
+				{
+					"name": "Suspend Company",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}/suspend",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}", "suspend"]
+						},
+						"description": "Suspende a empresa. Usuários não poderão fazer login.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Activate Company",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}/activate",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}", "activate"]
+						},
+						"description": "Ativa/reativa a empresa.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Delete Company",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}"]
+						},
+						"description": "Remove a empresa do sistema.\n**Requer:** SUPER_ADMIN\n**CUIDADO:** Esta ação é irreversível!"
+					}
+				},
+				{
+					"name": "Get Company Users",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}/users?page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}", "users"],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Lista todos os usuários da empresa.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Add User to Company",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}/users/4",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}", "users", "4"]
+						},
+						"description": "Adiciona um usuário existente à empresa.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Remove User from Company",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}/users/4",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}", "users", "4"]
+						},
+						"description": "Remove um usuário da empresa.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Get Company Workspaces",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}/workspaces?page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}", "workspaces"],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Lista todos os workspaces da empresa.\n**Requer:** SUPER_ADMIN"
+					}
+				},
+				{
+					"name": "Get Company Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies/{{companyId}}/stats",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "companies", "{{companyId}}", "stats"]
+						},
+						"description": "Retorna estatísticas da empresa:\n- Total de usuários / limite\n- Total de workspaces / limite\n- Storage usado / limite\n- Plano ativo\n\n**Requer:** SUPER_ADMIN"
+					}
+				}
+			]
+		},
+		{
+			"name": "📊 Dashboard",
+			"description": "Estatísticas e métricas do dashboard",
+			"item": [
+				{
+					"name": "Get Dashboard Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/dashboard/stats?workspaceId={{workspaceId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "dashboard", "stats"],
+							"query": [
+								{
+									"key": "workspaceId",
+									"value": "{{workspaceId}}"
+								}
+							]
+						},
+						"description": "Retorna estatísticas do workspace."
+					}
+				},
+				{
+					"name": "Get Recent Activity",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/dashboard/activity?workspaceId={{workspaceId}}&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "dashboard", "activity"],
+							"query": [
+								{
+									"key": "workspaceId",
+									"value": "{{workspaceId}}"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Retorna atividades recentes."
+					}
+				}
+			]
+		},
+		{
+			"name": "📁 Workspaces",
+			"description": "Gerenciamento de workspaces",
+			"item": [
+				{
+					"name": "List Workspaces",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces"]
+						},
+						"description": "Lista workspaces do usuário autenticado."
+					}
+				},
+				{
+					"name": "Get Workspace by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}"]
+						},
+						"description": "Retorna detalhes de um workspace."
+					}
+				},
+				{
+					"name": "Create Workspace",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set('workspaceId', jsonData.data.id);",
+									"        console.log('✓ Workspace criado! ID: ' + jsonData.data.id);",
+									"    }",
+									"}",
+									"",
+									"pm.test('Workspace criado', function () {",
+									"    pm.response.to.have.status(201);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Novo Projeto Web\",\n    \"description\": \"Workspace para o novo projeto\",\n    \"timezone\": \"America/Sao_Paulo\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces"]
+						},
+						"description": "Cria novo workspace."
+					}
+				},
+				{
+					"name": "Update Workspace",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Projeto Atualizado\",\n    \"description\": \"Nova descrição do projeto\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}"]
+						},
+						"description": "Atualiza workspace."
+					}
+				},
+				{
+					"name": "Delete Workspace",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}"]
+						},
+						"description": "Remove workspace."
+					}
+				}
+			]
+		},
+		{
+			"name": "📝 Content Types",
+			"description": "Gerenciamento de tipos de conteúdo",
+			"item": [
+				{
+					"name": "List Content Types",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/content-types",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "content-types"]
+						},
+						"description": "Lista content types do workspace."
+					}
+				},
+				{
+					"name": "Get Content Type",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/content-types/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "content-types", "1"]
+						},
+						"description": "Retorna um content type."
+					}
+				},
+				{
+					"name": "Create Content Type",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Articles\",\n    \"displayName\": \"Artigos\",\n    \"description\": \"Artigos do blog\",\n    \"icon\": \"📰\",\n    \"fields\": [\n        {\n            \"name\": \"title\",\n            \"type\": \"text\",\n            \"required\": true,\n            \"label\": \"Título\"\n        },\n        {\n            \"name\": \"content\",\n            \"type\": \"richtext\",\n            \"required\": true,\n            \"label\": \"Conteúdo\"\n        },\n        {\n            \"name\": \"author\",\n            \"type\": \"text\",\n            \"label\": \"Autor\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/content-types",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "content-types"]
+						},
+						"description": "Cria novo content type."
+					}
+				},
+				{
+					"name": "Update Content Type",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"displayName\": \"Artigos do Blog\",\n    \"description\": \"Descrição atualizada\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/content-types/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "content-types", "1"]
+						},
+						"description": "Atualiza content type."
+					}
+				},
+				{
+					"name": "Delete Content Type",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/content-types/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "content-types", "1"]
+						},
+						"description": "Remove content type."
+					}
+				}
+			]
+		},
+		{
+			"name": "📄 Entries",
+			"description": "Gerenciamento de entradas de conteúdo",
+			"item": [
+				{
+					"name": "List Entries",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/entries?page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "entries"],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Lista entradas do workspace."
+					}
+				},
+				{
+					"name": "Get Entry",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/entries/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "entries", "1"]
+						},
+						"description": "Retorna uma entrada."
+					}
+				},
+				{
+					"name": "Create Entry",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"contentTypeId\": 1,\n    \"title\": \"Meu Primeiro Artigo\",\n    \"slug\": \"meu-primeiro-artigo\",\n    \"data\": {\n        \"title\": \"Meu Primeiro Artigo\",\n        \"content\": \"<p>Conteúdo do artigo...</p>\",\n        \"excerpt\": \"Resumo do artigo\"\n    },\n    \"status\": \"DRAFT\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/entries",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "entries"]
+						},
+						"description": "Cria nova entrada."
+					}
+				},
+				{
+					"name": "Update Entry",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Artigo Atualizado\",\n    \"data\": {\n        \"title\": \"Artigo Atualizado\",\n        \"content\": \"<p>Conteúdo atualizado...</p>\"\n    },\n    \"status\": \"PUBLISHED\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/entries/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "entries", "1"]
+						},
+						"description": "Atualiza entrada."
+					}
+				},
+				{
+					"name": "Delete Entry",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/entries/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "entries", "1"]
+						},
+						"description": "Remove entrada."
+					}
+				}
+			]
+		},
+		{
+			"name": "🖼️ Media",
+			"description": "Upload e gerenciamento de mídia",
+			"item": [
+				{
+					"name": "List Media",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/media?page=0&size=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "media"],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Lista arquivos de mídia."
+					}
+				},
+				{
+					"name": "Upload Media",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": ""
+								},
+								{
+									"key": "alt",
+									"value": "Descrição da imagem",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/media/upload",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "media", "upload"]
+						},
+						"description": "Faz upload de arquivo."
+					}
+				},
+				{
+					"name": "Delete Media",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/media/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "media", "1"]
+						},
+						"description": "Remove arquivo de mídia."
+					}
+				}
+			]
+		},
+		{
+			"name": "🔑 API Keys",
+			"description": "Gerenciamento de chaves de API",
+			"item": [
+				{
+					"name": "List API Keys",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/api-keys",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "api-keys"]
+						},
+						"description": "Lista chaves de API."
+					}
+				},
+				{
+					"name": "Create API Key",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.key) {",
+									"        pm.collectionVariables.set('apiKey', jsonData.data.key);",
+									"        console.log('✓ API Key criada! Salve: ' + jsonData.data.key);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Chave de Produção\",\n    \"permissions\": [\"READ\", \"WRITE\"],\n    \"expiresAt\": \"2025-12-31T23:59:59\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/api-keys",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "api-keys"]
+						},
+						"description": "Cria nova API Key."
+					}
+				},
+				{
+					"name": "Revoke API Key",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/workspaces/{{workspaceId}}/api-keys/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "workspaces", "{{workspaceId}}", "api-keys", "1"]
+						},
+						"description": "Revoga uma API Key."
+					}
+				}
+			]
+		},
+		{
+			"name": "👥 Users",
+			"description": "Gerenciamento de usuários",
+			"item": [
+				{
+					"name": "List Users",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users?page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users"],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Lista usuários."
+					}
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "1"]
+						},
+						"description": "Retorna um usuário."
+					}
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Nome Atualizado\",\n    \"jobTitle\": \"Desenvolvedor Senior\",\n    \"department\": \"Engenharia\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "1"]
+						},
+						"description": "Atualiza usuário."
+					}
+				},
+				{
+					"name": "Change User Role",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"role\": \"ADMIN\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/1/role",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "1", "role"]
+						},
+						"description": "Altera role do usuário.\n\n**Roles disponíveis:**\n- SUPER_ADMIN\n- COMPANY_OWNER\n- ADMIN\n- USER"
+					}
+				}
+			]
+		},
+		{
+			"name": "⚙️ Settings",
+			"description": "Configurações do sistema",
+			"item": [
+				{
+					"name": "List Settings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/settings",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "settings"]
+						},
+						"description": "Lista configurações."
+					}
+				},
+				{
+					"name": "Get Setting",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/settings/site_name",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "settings", "site_name"]
+						},
+						"description": "Retorna uma configuração."
+					}
+				},
+				{
+					"name": "Update Setting",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"value\": \"Brazuca CMS Atualizado\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/settings/site_name",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "settings", "site_name"]
+						},
+						"description": "Atualiza configuração."
+					}
+				}
+			]
+		},
+		{
+			"name": "🌐 Public API (API Key)",
+			"description": "Endpoints públicos usando API Key",
+			"item": [
+				{
+					"name": "Get Entries (Public)",
+					"request": {
+						"auth": {
+							"type": "apikey",
+							"apikey": [
+								{
+									"key": "value",
+									"value": "{{apiKey}}",
+									"type": "string"
+								},
+								{
+									"key": "key",
+									"value": "X-API-Key",
+									"type": "string"
+								},
+								{
+									"key": "in",
+									"value": "header",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/public/entries?contentType=blog-posts",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "public", "entries"],
+							"query": [
+								{
+									"key": "contentType",
+									"value": "blog-posts"
+								}
+							]
+						},
+						"description": "Lista entradas públicas usando API Key."
+					}
+				},
+				{
+					"name": "Get Entry by Slug (Public)",
+					"request": {
+						"auth": {
+							"type": "apikey",
+							"apikey": [
+								{
+									"key": "value",
+									"value": "{{apiKey}}",
+									"type": "string"
+								},
+								{
+									"key": "key",
+									"value": "X-API-Key",
+									"type": "string"
+								},
+								{
+									"key": "in",
+									"value": "header",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/public/entries/meu-primeiro-artigo",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "public", "entries", "meu-primeiro-artigo"]
+						},
+						"description": "Busca entrada por slug usando API Key."
+					}
+				}
+			]
+		},
+		{
+			"name": "🏥 Health Check",
+			"description": "Verificação de saúde da API",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "health"]
+						},
+						"description": "Verifica se a API está funcionando."
+					}
+				}
+			]
+		}
+	]
+}

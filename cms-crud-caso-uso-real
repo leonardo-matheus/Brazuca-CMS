@@ -1,0 +1,2009 @@
+# CMS SaaS Brasil - Operações CRUD e Caso de Uso Real
+
+## Complete CRUD Operations & Real-World Use Case
+
+---
+
+## 📋 Table of Contents
+
+1. [CRUD Operations por Recurso](#crud-operations-por-recurso)
+2. [Fluxo Completo - Caso Real](#fluxo-completo---caso-real)
+3. [Detalhes do Workflow](#detalhes-do-workflow)
+4. [Permissões RBAC por Operação](#permissões-rbac-por-operação)
+5. [Tratamento de Erros](#tratamento-de-erros)
+
+---
+
+## 1. CRUD Operations por Recurso
+
+### 1.1 Organizations (Organizações)
+
+#### CREATE - Criar Organização
+```
+POST /v1/organizations
+Permissão: Qualquer usuário autenticado
+
+Payload obrigatório:
+- name (string, 3-255 chars)
+- description (string, opcional)
+- plan_type (enum: free, pro, enterprise)
+
+Retorno: 201 Created
+{
+  "id": "org-uuid",
+  "name": "Agência XYZ",
+  "slug": "agencia-xyz",
+  "owner_id": "user-uuid",
+  "plan_type": "pro",
+  "status": "active",
+  "created_at": "2024-01-01T10:00:00Z"
+}
+
+Evento Webhook: organization.created
+```
+
+#### READ - Listar/Obter Organizações
+```
+GET /v1/organizations              (listar todas do usuário)
+GET /v1/organizations/{org_id}     (obter específica)
+
+Permissão: Usuário membro da organização
+
+Retorno: 200 OK
+[
+  {
+    "id": "org-uuid",
+    "name": "Agência XYZ",
+    "slug": "agencia-xyz",
+    "owner_id": "user-uuid",
+    "plan_type": "pro",
+    "members_count": 5,
+    "status": "active"
+  }
+]
+
+Cacheabilidade: 5 minutos (Redis)
+```
+
+#### UPDATE - Atualizar Organização
+```
+PUT /v1/organizations/{org_id}
+Permissão: admin da organização
+
+Payload (todos opcionais):
+- name
+- description
+- logo_url
+
+Retorno: 200 OK
+{
+  "id": "org-uuid",
+  "name": "Agência XYZ - Atualizada",
+  "updated_at": "2024-01-15T14:30:00Z"
+}
+
+Evento Webhook: organization.updated
+Registro Audit: alterações detectadas
+```
+
+#### DELETE - Deletar Organização
+```
+DELETE /v1/organizations/{org_id}
+Permissão: owner da organização
+
+Retorno: 204 No Content
+
+Efeitos colaterais:
+- Soft delete (deleted_at timestamp)
+- Todos os entries, assets, webhooks são marcados como deletados
+- Dados mantidos por 30 dias antes de hard delete
+- Backups automáticos criados
+
+Evento Webhook: organization.deleted
+Registro Audit: quem deletou e quando
+```
+
+---
+
+### 1.2 Content Types (Tipos de Conteúdo)
+
+#### CREATE - Criar Tipo de Conteúdo
+```
+POST /v1/organizations/{org_id}/content-types
+Permissão: editor ou admin
+
+Payload obrigatório:
+- name (string, 3-100 chars)
+- slug (string, unique per org)
+- display_name (string)
+- fields (array de objetos)
+
+Estrutura de Field:
+{
+  "name": "Title",
+  "field_name": "title",
+  "field_type": "text|richtext|asset|reference|array|boolean|number|date",
+  "is_required": true,
+  "is_unique": false,
+  "display_order": 1,
+  "validation_rules": {
+    "min_length": 5,
+    "max_length": 255
+  }
+}
+
+Retorno: 201 Created
+{
+  "id": "type-uuid",
+  "name": "Blog Post",
+  "slug": "blog-post",
+  "fields": [...],
+  "entries_count": 0,
+  "created_at": "2024-01-01T10:00:00Z"
+}
+
+Validações:
+- Slug único na organização
+- Mínimo 1 field obrigatório
+- field_name único por content_type
+
+Evento Webhook: content_type.created
+```
+
+#### READ - Listar/Obter Tipos de Conteúdo
+```
+GET /v1/organizations/{org_id}/content-types
+GET /v1/organizations/{org_id}/content-types/{type_id}
+
+Permissão: viewer ou superior
+
+Query parameters:
+- limit: 50 (max 500)
+- offset: 0
+- sort: name|-created_at
+
+Retorno: 200 OK
+{
+  "data": [...],
+  "pagination": {...}
+}
+
+Cacheabilidade: 10 minutos
+Include: fields_count, entries_count
+```
+
+#### UPDATE - Atualizar Tipo de Conteúdo
+```
+PUT /v1/organizations/{org_id}/content-types/{type_id}
+Permissão: editor ou admin
+
+Payload (opcionais):
+- name
+- description
+- display_name
+
+ATENÇÃO: Não é possível alterar:
+- slug (imutável)
+- fields existentes (usar endpoint separado)
+
+Retorno: 200 OK
+
+Impacto:
+- Usuários editando entries com este content_type recebem notificação
+- Mudanças refletidas em tempo real
+
+Evento Webhook: content_type.updated
+```
+
+#### DELETE - Deletar Tipo de Conteúdo
+```
+DELETE /v1/organizations/{org_id}/content-types/{type_id}
+Permissão: admin
+
+Restrições:
+- Se content_type tem entries published: 403 Forbidden
+- Se draft/scheduled: pode deletar
+
+Retorno: 204 No Content (após confirmação)
+
+Efeitos:
+- Todas as entries deste tipo são marcadas como deletadas
+- Soft delete com retenção de 30 dias
+- Webhook backup criado
+
+Evento Webhook: content_type.deleted
+Registro Audit: quem deletou e quantidade de entries afetadas
+```
+
+---
+
+### 1.3 Content Fields (Campos de Conteúdo)
+
+#### CREATE - Adicionar Campo
+```
+POST /v1/organizations/{org_id}/content-types/{type_id}/fields
+Permissão: editor ou admin
+
+Payload:
+{
+  "name": "Author Email",
+  "field_name": "author_email",
+  "field_type": "text",
+  "is_required": false,
+  "display_order": 5,
+  "validation_rules": {
+    "pattern": "^[^@]+@[^@]+\\.[^@]+$"
+  }
+}
+
+Retorno: 201 Created
+
+Validações:
+- field_name único no content_type
+- display_order não conflita com existentes
+- validation_rules válidas para field_type
+
+Evento Webhook: content_field.created
+```
+
+#### READ - Listar Campos
+```
+GET /v1/organizations/{org_id}/content-types/{type_id}/fields
+
+Permissão: viewer
+
+Retorno: 200 OK
+[
+  {
+    "id": "field-uuid",
+    "name": "Title",
+    "field_name": "title",
+    "field_type": "text",
+    "is_required": true,
+    "display_order": 1
+  }
+]
+
+Ordenação: por display_order (ASC)
+```
+
+#### UPDATE - Atualizar Campo
+```
+PUT /v1/organizations/{org_id}/content-types/{type_id}/fields/{field_id}
+Permissão: editor ou admin
+
+Payload (opcionais):
+- name
+- is_required
+- display_order
+- validation_rules
+
+ATENÇÃO: Não pode mudar:
+- field_type (imutável após criação)
+- field_name (imutável)
+
+Impacto:
+- Se alterar is_required de false para true:
+  - Valida todos os entries existentes
+  - Se houver valores faltando: 409 Conflict
+  - Usuário deve preencher antes de confirmar
+
+Evento Webhook: content_field.updated
+```
+
+#### DELETE - Deletar Campo
+```
+DELETE /v1/organizations/{org_id}/content-types/{type_id}/fields/{field_id}
+Permissão: admin
+
+Restrições:
+- Pelo menos 1 field deve permanecer no content_type
+- Se field tem dados preenchidos em entries: confirmar exclusão
+
+Retorno: 204 No Content
+
+Efeitos:
+- Dados deste field removidos de todos os entries
+- Backup de dados em audit_logs
+- Notificação enviada para usuários editando entries
+
+Evento Webhook: content_field.deleted
+Registro Audit: dados removidos
+```
+
+---
+
+### 1.4 Entries (Conteúdos)
+
+#### CREATE - Criar Entry
+```
+POST /v1/organizations/{org_id}/content-types/{type_id}/entries
+Permissão: author ou superior
+
+Payload obrigatório:
+{
+  "title": "Meu Primeiro Blog Post",
+  "status": "draft",
+  "data": {
+    "title": "Meu Primeiro Blog Post",
+    "description": "<p>Conteúdo aqui...</p>",
+    "featured_image": "asset-uuid",
+    "tags": ["cms", "tutorial"]
+  }
+}
+
+Campos automáticos:
+- id: gerado
+- slug: gerado de title (customizável)
+- author_id: do JWT token
+- version: 1
+- created_at: now()
+- updated_at: now()
+
+Retorno: 201 Created
+{
+  "id": "entry-uuid",
+  "title": "Meu Primeiro Blog Post",
+  "slug": "meu-primeiro-blog-post",
+  "status": "draft",
+  "version": 1,
+  "created_at": "2024-01-15T14:30:00Z"
+}
+
+Validações:
+- Todos os fields obrigatórios preenchidos
+- Types de dados corretos
+- unique fields não duplicados
+- references existem
+
+Evento Webhook: entry.created
+Criação automática de entry_version com change_summary
+```
+
+#### READ - Listar/Obter Entries
+```
+GET /v1/organizations/{org_id}/content-types/{type_id}/entries
+GET /v1/organizations/{org_id}/content-types/{type_id}/entries/{entry_id}
+
+Permissão: viewer ou superior
+
+Query parameters (listagem):
+- limit: 20 (max 100)
+- offset: 0
+- status: draft|published|scheduled (filter)
+- sort: -published_at|-updated_at|title
+- search: "termo" (busca em title e description)
+- fields: title,description (select específicos)
+
+Retorno: 200 OK
+{
+  "data": [
+    {
+      "id": "entry-uuid",
+      "title": "...",
+      "status": "published",
+      "data": {...},
+      "version": 3,
+      "published_at": "2024-01-10T08:00:00Z"
+    }
+  ],
+  "pagination": {...}
+}
+
+Cacheabilidade:
+- draft: 0 (não cache)
+- published: 1 hora (TTL)
+- scheduled: 5 minutos
+
+Filtros públicos (sem auth):
+- Apenas status="published"
+- Apenas entries com published_at <= now()
+```
+
+#### UPDATE - Atualizar Entry
+```
+PUT /v1/organizations/{org_id}/content-types/{type_id}/entries/{entry_id}
+Permissão: author (própria) ou editor/admin
+
+Payload (opcionais):
+{
+  "title": "Título atualizado",
+  "status": "draft",
+  "data": {
+    "title": "Título atualizado",
+    "description": "<p>Novo conteúdo...</p>"
+  }
+}
+
+Comportamento:
+- Se status="published" e usuário é author: 403 (não pode unpublish)
+- Se entry tem scheduled_at futuro e status muda: scheduled_at limpo
+- Incrementa automaticamente version
+
+Retorno: 200 OK
+{
+  "id": "entry-uuid",
+  "version": 4,
+  "updated_at": "2024-01-15T14:30:00Z"
+}
+
+Criação automática:
+- Nova entry_version com change_summary gerado por IA
+- Registro em audit_logs
+
+Evento Webhook: entry.updated
+Cache invalidation: limpar TTL para esta entry
+```
+
+#### DELETE - Deletar Entry
+```
+DELETE /v1/organizations/{org_id}/content-types/{type_id}/entries/{entry_id}
+Permissão: editor ou admin (autor não pode)
+
+Comportamento:
+- Soft delete (deleted_at timestamp)
+- Dados mantidos por 30 dias
+- Todos os entry_versions também marcados como deletados
+
+Retorno: 204 No Content
+
+Efeitos:
+- Entry não aparece em listagens
+- PUBLIC API retorna 404
+- Webhooks associados não acionados
+- Cache invalidado
+
+Evento Webhook: entry.deleted
+Registro Audit: quem deletou e quando
+```
+
+---
+
+### 1.5 Publish/Unpublish
+
+#### PUBLISH - Publicar Entry
+```
+PUT /v1/organizations/{org_id}/content-types/{type_id}/entries/{entry_id}/publish
+Permissão: editor ou admin
+
+Payload:
+{
+  "publish_immediately": true
+  // OU
+  "scheduled_at": "2024-02-01T08:00:00Z"
+}
+
+Validações:
+- Status deve ser "draft" ou "scheduled"
+- Se scheduled_at: não pode ser no passado
+- Todos os campos obrigatórios preenchidos
+- Nenhum field com erro de validação
+
+Retorno: 200 OK
+{
+  "id": "entry-uuid",
+  "status": "published",
+  "published_at": "2024-01-15T14:30:00Z",
+  "scheduled_at": null
+}
+
+Efeitos (publish_immediately):
+- status = "published"
+- published_at = now()
+- Disponível na PUBLIC API imediatamente
+- Cache invalidado
+- Todas as categorias/tags atualizadas
+
+Efeitos (scheduled):
+- status = "scheduled"
+- scheduled_at = valor fornecido
+- Job agendado para publicação
+- Email de confirmação enviado
+
+Evento Webhook: entry.published
+Integração: Pode triggar campanhas de email/social
+```
+
+#### UNPUBLISH - Despublicar Entry
+```
+PUT /v1/organizations/{org_id}/content-types/{type_id}/entries/{entry_id}/unpublish
+Permissão: editor ou admin
+
+Payload: (vazio)
+
+Retorno: 200 OK
+{
+  "id": "entry-uuid",
+  "status": "draft",
+  "published_at": null
+}
+
+Efeitos:
+- Status volta para "draft"
+- published_at = null
+- Não mais disponível na PUBLIC API
+- Cache invalidado
+- Notificação enviada para followers
+
+Evento Webhook: entry.unpublished
+```
+
+---
+
+### 1.6 Assets (Arquivos)
+
+#### CREATE - Upload de Asset
+```
+POST /v1/organizations/{org_id}/assets
+Permissão: author ou superior
+
+Content-Type: multipart/form-data
+
+form-data:
+- file: (binary, obrigatório)
+- alt_text: (string, opcional)
+- description: (string, opcional)
+
+Restrições:
+- Tamanho máximo: 100MB (free), 1GB (pro)
+- Tipos permitidos: image/*, video/*, application/pdf
+- Deve passar verificação de segurança
+
+Retorno: 201 Created
+{
+  "id": "asset-uuid",
+  "file_name": "blog-header.jpg",
+  "file_type": "image",
+  "file_size": 524288,
+  "mime_type": "image/jpeg",
+  "url": "https://api.cms.saas.brasil/files/blog-header.jpg",
+  "cdn_url": "https://cdn.cms.saas.brasil/blog-header.jpg",
+  "metadata": {
+    "width": 1920,
+    "height": 1080,
+    "dominant_color": "#3498db"
+  },
+  "created_at": "2024-01-15T14:30:00Z"
+}
+
+Processamento:
+- Scan de malware (ClamAV)
+- Geração de thumbnail para imagens
+- Otimização de tamanho
+- Upload para S3
+- CDN invalidation
+
+Evento Webhook: asset.uploaded
+Integração: Análise de imagem (AWS Rekognition)
+```
+
+#### READ - Listar/Obter Assets
+```
+GET /v1/organizations/{org_id}/assets
+GET /v1/organizations/{org_id}/assets/{asset_id}
+
+Permissão: viewer ou superior
+
+Query parameters:
+- limit: 30 (max 100)
+- offset: 0
+- file_type: image|video|document|audio (filter)
+- sort: -created_at|-file_size|file_name
+
+Retorno: 200 OK
+{
+  "data": [
+    {
+      "id": "asset-uuid",
+      "file_name": "...",
+      "url": "https://cdn.cms.saas.brasil/...",
+      "metadata": {...},
+      "usage_count": 5,
+      "created_at": "2024-01-01T10:00:00Z"
+    }
+  ],
+  "pagination": {...}
+}
+
+Cacheabilidade: 1 hora
+Include: usage_count (quantas entries usam)
+```
+
+#### UPDATE - Atualizar Metadata de Asset
+```
+PUT /v1/organizations/{org_id}/assets/{asset_id}
+Permissão: author ou superior
+
+Payload:
+{
+  "alt_text": "Novo texto alternativo",
+  "description": "Nova descrição"
+}
+
+ATENÇÃO: Não é possível:
+- Mudar o arquivo em si
+- Renomear o arquivo
+
+Retorno: 200 OK
+
+Evento Webhook: asset.updated
+```
+
+#### DELETE - Deletar Asset
+```
+DELETE /v1/organizations/{org_id}/assets/{asset_id}
+Permissão: editor ou admin
+
+Validações:
+- Se asset está sendo usado em entries: confirmar exclusão
+- Se usado em > 5 entries: 409 Conflict
+
+Retorno: 204 No Content
+
+Efeitos:
+- Arquivo removido de S3
+- CDN cache invalidado
+- Referências removidas de entries
+- Backup criado
+
+Evento Webhook: asset.deleted
+Registro Audit: espaço liberado
+```
+
+---
+
+### 1.7 Categories (Categorias)
+
+#### CREATE - Criar Categoria
+```
+POST /v1/organizations/{org_id}/content-types/{type_id}/categories
+Permissão: editor ou admin
+
+Payload:
+{
+  "name": "Technology",
+  "description": "Articles about tech trends"
+}
+
+Retorno: 201 Created
+{
+  "id": "category-uuid",
+  "name": "Technology",
+  "slug": "technology",
+  "created_at": "2024-01-15T14:30:00Z"
+}
+
+Validações:
+- slug único por content_type
+- name não duplicado
+```
+
+#### READ - Listar Categorias
+```
+GET /v1/organizations/{org_id}/content-types/{type_id}/categories
+
+Permissão: viewer
+
+Retorno: 200 OK
+[
+  {
+    "id": "category-uuid",
+    "name": "Technology",
+    "slug": "technology",
+    "entries_count": 12
+  }
+]
+
+Cacheabilidade: 1 hora
+Ordenação: por entries_count (DESC)
+```
+
+#### UPDATE - Atualizar Categoria
+```
+PUT /v1/organizations/{org_id}/content-types/{type_id}/categories/{category_id}
+Permissão: editor
+
+Payload:
+{
+  "name": "Technology & AI"
+}
+
+Retorno: 200 OK
+
+Impacto:
+- Slug regenerado se nome mudou
+- Entries com esta categoria recebem notificação
+```
+
+#### DELETE - Deletar Categoria
+```
+DELETE /v1/organizations/{org_id}/content-types/{type_id}/categories/{category_id}
+Permissão: admin
+
+Efeitos:
+- Categoria removida de todas as entries
+- Se entries_count > 0: realocar para categoria padrão
+
+Retorno: 204 No Content
+
+Registro Audit: entries afetadas
+```
+
+---
+
+### 1.8 Tags (Etiquetas)
+
+#### CREATE - Criar Tag
+```
+POST /v1/organizations/{org_id}/tags
+Permissão: author ou superior
+
+Payload:
+{
+  "name": "cms"
+}
+
+Retorno: 201 Created
+{
+  "id": "tag-uuid",
+  "name": "cms",
+  "slug": "cms",
+  "usage_count": 0,
+  "created_at": "2024-01-15T14:30:00Z"
+}
+
+Validação:
+- slug único por organização
+- case-insensitive duplicates detectadas
+```
+
+#### READ - Listar Tags
+```
+GET /v1/organizations/{org_id}/tags
+
+Permissão: viewer
+
+Query parameters:
+- sort: -usage_count (padrão)
+- search: "cms" (autocomplete)
+
+Retorno: 200 OK
+[
+  {
+    "id": "tag-uuid",
+    "name": "cms",
+    "slug": "cms",
+    "usage_count": 15
+  }
+]
+
+Cacheabilidade: 1 hora
+```
+
+#### UPDATE - Atualizar Tag
+```
+PUT /v1/organizations/{org_id}/tags/{tag_id}
+Permissão: editor
+
+Payload:
+{
+  "name": "content-management"
+}
+
+Retorno: 200 OK
+
+Impacto:
+- Slug regenerado
+- Todas as entries afetadas recebem notificação
+```
+
+#### DELETE - Deletar Tag
+```
+DELETE /v1/organizations/{org_id}/tags/{tag_id}
+Permissão: admin
+
+Efeitos:
+- Tag removida de todas as entries
+
+Retorno: 204 No Content
+
+Restrição:
+- Se usage_count > 100: requer confirmação dupla
+```
+
+---
+
+### 1.9 API Keys
+
+#### CREATE - Gerar API Key
+```
+POST /v1/organizations/{org_id}/api-keys
+Permissão: admin
+
+Payload:
+{
+  "name": "Mobile App",
+  "expires_at": "2025-01-01T00:00:00Z"
+}
+
+Retorno: 201 Created
+{
+  "id": "key-uuid",
+  "name": "Mobile App",
+  "key": "api_key_0123456789abcdefghijklmnopqrst",
+  "key_mask": "api_***...****",
+  "is_active": true,
+  "created_at": "2024-01-15T14:30:00Z",
+  "note": "Save this key safely. You won't see it again."
+}
+
+Segurança:
+- Key criptografada em repouso
+- Hash da key armazenado
+- Rotation recomendado a cada 90 dias
+```
+
+#### READ - Listar API Keys
+```
+GET /v1/organizations/{org_id}/api-keys
+Permissão: admin
+
+Retorno: 200 OK
+[
+  {
+    "id": "key-uuid",
+    "name": "Mobile App",
+    "key_mask": "api_***...****",
+    "is_active": true,
+    "last_used": "2024-01-15T10:30:00Z",
+    "expires_at": "2025-01-01T00:00:00Z"
+  }
+]
+
+Cacheabilidade: 5 minutos
+```
+
+#### UPDATE - Desativar/Reativar API Key
+```
+PATCH /v1/organizations/{org_id}/api-keys/{key_id}
+Permissão: admin
+
+Payload:
+{
+  "is_active": false
+}
+
+Retorno: 200 OK
+
+Impacto:
+- Se is_active=false: todas as requisições com esta key retornam 401
+- Se is_active=true: key reativada
+```
+
+#### DELETE - Revogar API Key
+```
+DELETE /v1/organizations/{org_id}/api-keys/{key_id}
+Permissão: admin
+
+Retorno: 204 No Content
+
+Efeitos:
+- Key permanentemente deletada
+- Não pode ser recuperada
+- Audit log registra revogação
+```
+
+---
+
+### 1.10 Webhooks
+
+#### CREATE - Criar Webhook
+```
+POST /v1/organizations/{org_id}/webhooks
+Permissão: admin
+
+Payload:
+{
+  "name": "Slack Notifications",
+  "url": "https://hooks.slack.com/services/T00000000/B00000000/XXXX",
+  "events": ["entry.published", "entry.updated", "entry.deleted"],
+  "retry_count": 3,
+  "headers": {
+    "Authorization": "Bearer token"
+  }
+}
+
+Retorno: 201 Created
+{
+  "id": "webhook-uuid",
+  "name": "Slack Notifications",
+  "url": "https://hooks.slack.com/...",
+  "events": [...],
+  "is_active": true,
+  "retry_count": 3,
+  "created_at": "2024-01-15T14:30:00Z"
+}
+
+Validação:
+- URL válida e acessível (test request)
+- Máximo 10 eventos por webhook
+- Máximo 5 webhooks por organização (free), 20 (pro)
+```
+
+#### READ - Listar Webhooks
+```
+GET /v1/organizations/{org_id}/webhooks
+Permissão: admin
+
+Retorno: 200 OK
+[
+  {
+    "id": "webhook-uuid",
+    "name": "Slack",
+    "url": "https://hooks.slack.com/...",
+    "events": [...],
+    "is_active": true,
+    "last_triggered": "2024-01-15T10:30:00Z",
+    "success_count": 42,
+    "failure_count": 1
+  }
+]
+
+Incluir: estatísticas de sucesso/falha
+```
+
+#### UPDATE - Atualizar Webhook
+```
+PUT /v1/organizations/{org_id}/webhooks/{webhook_id}
+Permissão: admin
+
+Payload (opcionais):
+{
+  "events": ["entry.published"],
+  "is_active": true
+}
+
+Retorno: 200 OK
+
+Validação:
+- URL re-testada se mudou
+```
+
+#### DELETE - Deletar Webhook
+```
+DELETE /v1/organizations/{org_id}/webhooks/{webhook_id}
+Permissão: admin
+
+Retorno: 204 No Content
+
+Efeitos:
+- Webhook removido
+- Eventos futuros não disparam
+- Logs históricos mantidos por 90 dias
+```
+
+---
+
+### 1.11 Users (Usuários)
+
+#### CREATE - Registrar Usuário
+```
+POST /v1/auth/register
+Sem autenticação
+
+Payload:
+{
+  "email": "user@example.com",
+  "username": "johndoe",
+  "password": "SecurePass123!",
+  "full_name": "John Doe"
+}
+
+Retorno: 201 Created
+{
+  "id": "user-uuid",
+  "email": "user@example.com",
+  "username": "johndoe",
+  "full_name": "John Doe",
+  "created_at": "2024-01-15T14:30:00Z"
+}
+
+Validações:
+- Email válido e único
+- Username único e 3-30 caracteres
+- Password atende requisitos de força
+- Email verification enviado
+
+Efeitos:
+- User criado com is_verified=false
+- Primeira organização criada automaticamente
+- Email de confirmação enviado
+```
+
+#### READ - Obter Perfil do Usuário
+```
+GET /v1/users/me
+Permissão: autenticado
+
+Retorno: 200 OK
+{
+  "id": "user-uuid",
+  "email": "user@example.com",
+  "username": "johndoe",
+  "full_name": "John Doe",
+  "profile_image_url": "https://cdn.cms.saas.brasil/avatars/user.jpg",
+  "is_verified": true,
+  "organizations": [
+    {
+      "id": "org-uuid",
+      "name": "Agência XYZ",
+      "role": "admin"
+    }
+  ]
+}
+
+Cacheabilidade: 5 minutos
+```
+
+#### UPDATE - Atualizar Perfil
+```
+PUT /v1/users/me
+Permissão: autenticado
+
+Payload (opcionais):
+{
+  "full_name": "John Smith",
+  "profile_image_url": "asset-uuid",
+  "bio": "Content creator and developer"
+}
+
+Retorno: 200 OK
+
+Efeitos:
+- Cache invalidado
+- Notificações enviadas às organizações sobre mudança
+```
+
+#### DELETE - Deletar Conta (Soft Delete)
+```
+DELETE /v1/users/me
+Permissão: autenticado
+
+Payload:
+{
+  "password": "password_de_confirmacao"
+}
+
+Retorno: 204 No Content
+
+Efeitos:
+- User marcado como deleted_at = now()
+- Dados mantidos por 30 dias
+- Hard delete automático após 30 dias
+- Todas as organizações owned removidas também
+- Notificação para outras organizações onde era membro
+
+Registro Audit: quem deletou e quando
+```
+
+---
+
+## 2. Fluxo Completo - Caso Real
+
+### Cenário: Agência Digital Publicando Série de Blog Posts sobre CMS
+
+**Contexto:**
+- Agência: "Marketing Digital Brasil"
+- Equipe: 1 estrategista, 2 redatores, 1 designer, 1 revisor
+- Objetivo: Publicar série de 5 blog posts sobre CMS com cronograma de 2 semanas
+- Plataforma de destino: Blog + Newsletter + Redes Sociais
+
+---
+
+### Fase 1: Configuração Inicial (Dia 1 - 2 horas)
+
+#### 1.1 CEO/Admin - Criar Organização
+```
+Action: POST /v1/organizations
+Payload:
+{
+  "name": "Marketing Digital Brasil",
+  "description": "Agência especializada em marketing digital e conteúdo",
+  "plan_type": "pro"
+}
+
+Response: 201 Created
+{
+  "id": "org_MDB_12345",
+  "name": "Marketing Digital Brasil",
+  "slug": "marketing-digital-brasil",
+  "owner_id": "user_ceo",
+  "status": "active"
+}
+
+Webhook: organization.created
+Audit: CEO criou organização
+```
+
+#### 1.2 CEO - Adicionar Membros da Equipe
+```
+Action: POST /v1/organizations/org_MDB_12345/members
+Payloads:
+1. Email: "estrategista@mdb.com", Role: "editor"
+2. Email: "redator1@mdb.com", Role: "author"
+3. Email: "redator2@mdb.com", Role: "author"
+4. Email: "designer@mdb.com", Role: "author"
+5. Email: "revisor@mdb.com", Role: "editor"
+
+Response: 201 Created (x5)
+
+Webhook: user.joined (x5)
+Emails enviados para cada novo membro
+```
+
+#### 1.3 Estrategista - Criar Tipo de Conteúdo "Blog Post"
+```
+Action: POST /v1/organizations/org_MDB_12345/content-types
+Payload:
+{
+  "name": "Blog Post",
+  "slug": "blog-post",
+  "display_name": "Artigo do Blog",
+  "description": "Artigos para o blog da agência",
+  "fields": [
+    {
+      "name": "Título",
+      "field_name": "title",
+      "field_type": "text",
+      "is_required": true,
+      "display_order": 1,
+      "validation_rules": {"min_length": 10, "max_length": 200}
+    },
+    {
+      "name": "Descrição Curta",
+      "field_name": "excerpt",
+      "field_type": "text",
+      "is_required": true,
+      "display_order": 2,
+      "validation_rules": {"min_length": 20, "max_length": 160}
+    },
+    {
+      "name": "Conteúdo",
+      "field_name": "content",
+      "field_type": "richtext",
+      "is_required": true,
+      "display_order": 3
+    },
+    {
+      "name": "Imagem em Destaque",
+      "field_name": "featured_image",
+      "field_type": "asset",
+      "is_required": true,
+      "display_order": 4
+    },
+    {
+      "name": "Autor",
+      "field_name": "author",
+      "field_type": "text",
+      "is_required": true,
+      "display_order": 5
+    },
+    {
+      "name": "Tags",
+      "field_name": "tags",
+      "field_type": "array",
+      "is_required": false,
+      "display_order": 6
+    },
+    {
+      "name": "Categoria",
+      "field_name": "category",
+      "field_type": "reference",
+      "is_required": true,
+      "display_order": 7
+    }
+  ]
+}
+
+Response: 201 Created
+{
+  "id": "type_bp_98765",
+  "name": "Blog Post",
+  "slug": "blog-post",
+  "fields": [...],
+  "created_at": "2024-01-15T09:00:00Z"
+}
+
+Webhook: content_type.created
+Audit: Estrategista criou content type
+```
+
+#### 1.4 Estrategista - Criar Categorias
+```
+Action: POST /v1/organizations/org_MDB_12345/content-types/type_bp_98765/categories
+Payloads:
+1. Name: "Marketing Digital"
+2. Name: "Tecnologia"
+3. Name: "Content Management"
+
+Response: 201 Created (x3)
+
+Webhook: (x3) category.created
+```
+
+#### 1.5 Estrategista - Criar Tags Recomendadas
+```
+Action: POST /v1/organizations/org_MDB_12345/tags
+Payloads:
+1. Name: "cms"
+2. Name: "blog"
+3. Name: "marketing"
+4. Name: "conteúdo"
+5. Name: "seo"
+
+Response: 201 Created (x5)
+
+Webhook: (x5) tag.created
+```
+
+#### 1.6 Admin - Criar API Key para Webhook (Sistema de Newsletter)
+```
+Action: POST /v1/organizations/org_MDB_12345/api-keys
+Payload:
+{
+  "name": "Newsletter Service",
+  "expires_at": "2025-12-31T23:59:59Z"
+}
+
+Response: 201 Created
+{
+  "id": "key_newsletter_001",
+  "name": "Newsletter Service",
+  "key": "api_key_abcdef123456...",
+  "key_mask": "api_***...****"
+}
+
+Armazenado: No servidor de newsletter
+```
+
+#### 1.7 Admin - Criar Webhook para Notificações de Publicação
+```
+Action: POST /v1/organizations/org_MDB_12345/webhooks
+Payload:
+{
+  "name": "Newsletter & Social Media",
+  "url": "https://newsletter.mdb.com/webhooks/cms",
+  "events": ["entry.published"],
+  "retry_count": 3,
+  "headers": {
+    "Authorization": "Bearer api_key_abcdef123456..."
+  }
+}
+
+Response: 201 Created
+{
+  "id": "webhook_newsletter_001",
+  "name": "Newsletter & Social Media",
+  "is_active": true,
+  "created_at": "2024-01-15T10:00:00Z"
+}
+
+Webhook: Teste automático realizado
+Efeito: Quando posts forem publicados, newsletter será notificada
+```
+
+**Tempo decorrido: 2 horas**
+
+---
+
+### Fase 2: Planejamento de Conteúdo (Dia 2 - 3 horas)
+
+#### 2.1 Estrategista - Revisar Cronograma
+```
+Checklist de Publicação:
+- Artigo 1: "O que é Headless CMS?" - Publicar 22/01
+- Artigo 2: "Vantagens do CMS SaaS" - Publicar 25/01
+- Artigo 3: "Guia de Implementação" - Publicar 28/01
+- Artigo 4: "Casos de Uso Reais" - Publicar 01/02
+- Artigo 5: "Escolhendo Seu CMS" - Publicar 05/02
+
+Distribuição de Tarefas (via comments no CMS):
+- Redator 1: Artigos 1 e 3
+- Redator 2: Artigos 2 e 4
+- Designer: Imagens para todos (5)
+- Revisor: Revisa antes de publicar
+```
+
+---
+
+### Fase 3: Criação de Conteúdo (Dias 3-5 - 20 horas)
+
+#### 3.1 Redator 1 - Criar Primeiro Artigo (Rascunho)
+```
+Action: POST /v1/organizations/org_MDB_12345/content-types/type_bp_98765/entries
+Payload:
+{
+  "title": "O que é Headless CMS? Guia Completo para 2024",
+  "status": "draft",
+  "data": {
+    "title": "O que é Headless CMS? Guia Completo para 2024",
+    "excerpt": "Descubra como um headless CMS pode revolucionar a forma como você gerencia conteúdo...",
+    "content": "<h2>Introdução</h2>\n<p>Um headless CMS é...</p>\n<!-- conteúdo completo -->",
+    "featured_image": null,
+    "author": "João Silva",
+    "tags": ["cms", "headless", "marketing"],
+    "category": "Technology"
+  }
+}
+
+Response: 201 Created
+{
+  "id": "entry_art1_001",
+  "title": "O que é Headless CMS? Guia Completo para 2024",
+  "slug": "o-que-e-headless-cms-guia-completo-2024",
+  "status": "draft",
+  "version": 1,
+  "author_id": "redator1",
+  "created_at": "2024-01-17T09:00:00Z"
+}
+
+Webhook: entry.created
+Audit: Redator 1 criou artigo 1
+Status no Kanban: "Em Redação" → "Aguardando Imagem"
+```
+
+#### 3.2 Designer - Upload de Imagem em Destaque
+```
+Action: POST /v1/organizations/org_MDB_12345/assets
+Content-Type: multipart/form-data
+
+form-data:
+- file: (image.jpg - 2.4MB)
+- alt_text: "Diagrama de arquitetura headless CMS"
+- description: "Imagem para artigo sobre headless CMS"
+
+Response: 201 Created
+{
+  "id": "asset_img1_001",
+  "file_name": "headless-cms-diagram.jpg",
+  "file_type": "image",
+  "file_size": 524288,
+  "url": "https://api.cms.saas.brasil/files/headless-cms-diagram.jpg",
+  "cdn_url": "https://cdn.cms.saas.brasil/headless-cms-diagram.jpg",
+  "metadata": {
+    "width": 1920,
+    "height": 1080,
+    "dominant_color": "#0066CC"
+  }
+}
+
+Webhook: asset.uploaded
+Processamento: Thumbnail criado, S3 upload completo, CDN cache
+Notificação: Designer marca como pronto no Slack
+```
+
+#### 3.3 Redator 1 - Atualizar Artigo com Imagem
+```
+Action: PUT /v1/organizations/org_MDB_12345/content-types/type_bp_98765/entries/entry_art1_001
+Payload:
+{
+  "title": "O que é Headless CMS? Guia Completo para 2024",
+  "status": "draft",
+  "data": {
+    "title": "O que é Headless CMS? Guia Completo para 2024",
+    "excerpt": "Descubra como um headless CMS pode revolucionar...",
+    "content": "<h2>Introdução</h2>\n<p>Um headless CMS é...</p>...",
+    "featured_image": "asset_img1_001",
+    "author": "João Silva",
+    "tags": ["cms", "headless", "marketing", "2024"],
+    "category": "Technology"
+  }
+}
+
+Response: 200 OK
+{
+  "id": "entry_art1_001",
+  "version": 2,
+  "updated_at": "2024-01-17T11:30:00Z"
+}
+
+Webhook: entry.updated
+Audit: Versão 2 criada com change_summary "Adicionada imagem em destaque"
+Status: "Aguardando Imagem" → "Pronto para Revisão"
+```
+
+#### 3.4 Revisor - Revisar Artigo
+```
+Action: GET /v1/organizations/org_MDB_12345/content-types/type_bp_98765/entries/entry_art1_001
+Permissão: editor
+
+Response: 200 OK
+{
+  "id": "entry_art1_001",
+  "title": "O que é Headless CMS?...",
+  "status": "draft",
+  "version": 2,
+  "data": {...},
+  "created_by": "redator1",
+  "updated_at": "2024-01-17T11:30:00Z"
+}
+
+Revisor comentários (via comentários do CMS):
+- "Adicionar mais exemplos práticos na seção 3"
+- "Revisar gramática na linha 45"
+- "Imagem de destaque: perfeita!"
+```
+
+#### 3.5 Redator 1 - Fazer Correções (Nova Versão)
+```
+Action: PUT /v1/organizations/org_MDB_12345/content-types/type_bp_98765/entries/entry_art1_001
+Payload:
+{
+  "status": "draft",
+  "data": {
+    "content": "<h2>Introdução</h2>\n<p>Um headless CMS é...</p>\n<h2>Exemplos Práticos</h2>\n<!-- exemplos adicionados -->...",
+    ...
+  }
+}
+
+Response: 200 OK
+{
+  "id": "entry_art1_001",
+  "version": 3,
+  "updated_at": "2024-01-17T13:00:00Z"
+}
+
+Webhook: entry.updated
+Change Summary: "Adicionados exemplos práticos e revisão gramatical"
+Notificação: Enviada ao revisor
+```
+
+#### 3.6 Revisor - Aprovar Artigo
+```
+Ação: Revisor marca como pronto via comentário "Aprovado ✓"
+Status: "Pronto para Revisão" → "Pronto para Publicação"
+
+Observação: CMS pode ter feature de "approval workflow"
+que muda status automaticamente para "approved"
+```
+
+**Repetir para Artigos 2-5 nos próximos dias**
+
+**Tempo decorrido: 20 horas (distribuído em 3 dias)**
+
+---
+
+### Fase 4: Agendamento de Publicações (Dia 6 - 1 hora)
+
+#### 4.1 Estrategista - Agendar Publicações
+```
+Para cada artigo aprovado:
+
+Action: PUT /v1/organizations/org_MDB_12345/content-types/type_bp_98765/entries/{entry_id}/publish
+Payloads:
+1. Artigo 1 - Scheduled: "2024-01-22T08:00:00Z"
+2. Artigo 2 - Scheduled: "2024-01-25T08:00:00Z"
+3. Artigo 3 - Scheduled: "2024-01-28T08:00:00Z"
+4. Artigo 4 - Scheduled: "2024-02-01T08:00:00Z"
+5. Artigo 5 - Scheduled: "2024-02-05T08:00:00Z"
+
+Response: 200 OK (x5)
+{
+  "id": "entry_art1_001",
+  "status": "scheduled",
+  "scheduled_at": "2024-01-22T08:00:00Z",
+  "published_at": null
+}
+
+Webhook: entry.scheduled (x5)
+Jobs: 5 jobs de publicação agendados no Bull Queue
+Emails: Confirmações enviadas para equipe
+```
+
+**Tempo decorrido: 1 hora**
+
+---
+
+### Fase 5: Automação de Publicação (Dia 9)
+
+#### 5.1 Sistema - Publicar Artigo 1 (Automático)
+```
+Trigger: Cron job às 08:00 UTC
+
+Action: Interna (não há requisição HTTP)
+- Localiza entry com status="scheduled" e scheduled_at <= now()
+- Atualiza entry para status="published"
+- Define published_at = now()
+- Invoca webhook
+
+Webhook enviado:
+{
+  "event": "entry.published",
+  "timestamp": "2024-01-22T08:00:00Z",
+  "organization_id": "org_MDB_12345",
+  "data": {
+    "entry_id": "entry_art1_001",
+    "entry_title": "O que é Headless CMS?...",
+    "content_type": "blog-post",
+    "status": "published",
+    "author_id": "redator1",
+    "published_at": "2024-01-22T08:00:00Z"
+  }
+}
+
+Serviço de Newsletter recebe webhook:
+- Carrega conteúdo da entry via API
+- Formata para email
+- Adiciona links de compartilhamento
+- Envia newsletter para subscribers
+- Publica preview no Twitter/LinkedIn
+```
+
+**Timeline:**
+- 08:00 - Artigo 1 publicado automaticamente
+- 08:05 - Newsletter enviada para 2.500 subscribers
+- 08:10 - Social media posts publicados
+- 08:15 - Analytics começam a registrar tráfego
+
+---
+
+### Fase 6: Monitoramento (Dias 9-14)
+
+#### 6.1 Estrategista - Ver Estatísticas de Engajamento
+```
+Action: GET /v1/organizations/org_MDB_12345/content-types/type_bp_98765/entries/entry_art1_001
+
+Response: 200 OK (com metadata de performance)
+{
+  "id": "entry_art1_001",
+  "title": "O que é Headless CMS?...",
+  "status": "published",
+  "published_at": "2024-01-22T08:00:00Z",
+  "analytics": {
+    "views": 1250,
+    "average_time_on_page": "4m 32s",
+    "bounce_rate": "25%",
+    "conversions": 47
+  }
+}
+
+Observação: Analytics integrados com Google Analytics / Plausible
+Dados aparecem em tempo real no dashboard
+```
+
+#### 6.2 Revisor - Atualizar Artigo 1 com Novas Informações
+```
+Após publicação, novo padrão pode surgir.
+
+Action: PUT /v1/organizations/org_MDB_12345/content-types/type_bp_98765/entries/entry_art1_001
+Payload:
+{
+  "status": "published",
+  "data": {
+    "content": "<!-- conteúdo atualizado com nova seção -->...",
+    ...
+  }
+}
+
+Response: 200 OK
+{
+  "id": "entry_art1_001",
+  "version": 4,
+  "status": "published",
+  "updated_at": "2024-01-24T10:00:00Z"
+}
+
+Webhook: entry.updated (mesmo que publicado)
+Efeito: Mudanças aparecem imediatamente no site (cache invalidado)
+Change Summary: "Atualizada seção de casos de uso com novo exemplo"
+```
+
+#### 6.3 Visualizar Histórico de Versões
+```
+Action: GET /v1/organizations/org_MDB_12345/content-types/type_bp_98765/entries/entry_art1_001/versions
+
+Response: 200 OK
+[
+  {
+    "version_number": 4,
+    "data": {...},
+    "change_summary": "Atualizada seção de casos de uso com novo exemplo",
+    "changed_by": "revisor",
+    "created_at": "2024-01-24T10:00:00Z"
+  },
+  {
+    "version_number": 3,
+    "data": {...},
+    "change_summary": "Adicionados exemplos práticos e revisão gramatical",
+    "changed_by": "redator1",
+    "created_at": "2024-01-17T13:00:00Z"
+  },
+  {
+    "version_number": 2,
+    "data": {...},
+    "change_summary": "Adicionada imagem em destaque",
+    "changed_by": "redator1",
+    "created_at": "2024-01-17T11:30:00Z"
+  },
+  {
+    "version_number": 1,
+    "data": {...},
+    "change_summary": "Versão inicial",
+    "changed_by": "redator1",
+    "created_at": "2024-01-17T09:00:00Z"
+  }
+]
+
+Efeito: Revisor pode restaurar qualquer versão anterior se necessário
+```
+
+#### 6.4 Restaurar Versão Anterior (Se Necessário)
+```
+Se artigo tiver problema crítico:
+
+Action: POST /v1/organizations/org_MDB_12345/content-types/type_bp_98765/entries/entry_art1_001/restore-version
+Payload:
+{
+  "version_number": 3
+}
+
+Response: 200 OK
+{
+  "id": "entry_art1_001",
+  "version": 5,
+  "restored_from_version": 3,
+  "updated_at": "2024-01-24T14:30:00Z"
+}
+
+Webhook: entry.updated
+Change Summary: "Revertida versão 4 para versão 3"
+Cache: Imediatamente invalidado, nova versão ao vivo
+Notificação: Enviada a quem editou a v4
+```
+
+---
+
+### Fase 7: Performance & Análise Final (Fim de Fevereiro)
+
+#### 7.1 Estrategista - Gerar Relatório
+```
+Dados compilados após 2 semanas:
+
+Total de Artigos Publicados: 5
+Total de Visualizações: 5.847
+Total de Conversões: 187
+Taxa de Conversão Média: 3.2%
+Tempo Médio por Página: 4m 15s
+Taxa de Rejeição Média: 28%
+
+Top Performer: Artigo 3 ("Guia de Implementação")
+- 1.240 views
+- 52 conversões
+- 4.19% conversion rate
+
+Artigo com Maior Tempo: Artigo 5 ("Escolhendo Seu CMS")
+- 5m 47s average time on page
+
+Integração: Relatório exportado em PDF
+Newsletter: Resultado compartilhado com stakeholders
+```
+
+#### 7.2 CEO - Avaliar Impacto no Negócio
+```
+Benefícios Quantificados:
+- 187 leads qualificados gerados
+- 52 trials iniciados
+- 8 clientes convertidos
+- ROI da campanha: 340%
+
+Benefícios Qualitativos:
+- Brand awareness aumentado
+- Positioning melhorado no mercado
+- Confiança do cliente
+- Conteúdo evergreen para SEO
+
+Decisão: Expandir programa para 2 campanhas/mês
+Próximas Series:
+1. Comparativo com Concorrentes
+2. Guia de Migração de Legacy CMS
+3. Best Practices de Content Governance
+```
+
+---
+
+## 3. Detalhes do Workflow
+
+### 3.1 Estados de um Entry (Máquina de Estados)
+
+```
+draft
+  ├─ (author/editor) → published
+  ├─ (editor) → scheduled
+  └─ (admin) → deleted
+
+scheduled
+  ├─ (system auto) → published (quando atinge scheduled_at)
+  ├─ (editor) → draft (cancel agendamento)
+  └─ (admin) → deleted
+
+published
+  ├─ (editor) → draft (unpublish)
+  ├─ (editor) → updated (mantém status)
+  └─ (admin) → deleted
+
+deleted (soft delete)
+  ├─ (admin) → restored (no primeiro mês)
+  └─ (system auto) → hard deleted (após 30 dias)
+```
+
+### 3.2 Fluxo de Aprovação
+
+```
+Criador cria (draft)
+    ↓
+Revisor comenta/aprova
+    ↓
+Se rejeitado:
+    Criador ajusta e resubmete
+    ↓ (volta ao início)
+
+Se aprovado:
+    Estrategista agenda publicação
+    ↓
+    Data agendada chega
+    ↓
+    Sistema publica automaticamente
+    ↓
+    Webhooks disparam
+    ↓
+    Notificações enviadas (email, Slack, etc)
+    ↓
+    Conteúdo ao vivo e rastreável
+```
+
+### 3.3 Integração com Ferramentas Externas
+
+```
+CMS → Webhook → Sistema de Newsletter
+                  ↓
+                  Envia email para subscribers
+                  ↓
+                  Google Analytics (rastreamento)
+
+CMS → API → Aplicativo Mobile
+            ↓
+            Mostra conteúdo atualizado
+
+CMS → API → Social Media Bot
+            ↓
+            Posta preview em Twitter/LinkedIn
+
+CMS → Webhook → Slack
+                ↓
+                Notificação em channel #content
+```
+
+---
+
+## 4. Permissões RBAC por Operação
+
+### 4.1 Matriz de Permissões
+
+| Operação | Viewer | Author | Editor | Admin | Owner |
+|----------|--------|--------|--------|-------|-------|
+| CREATE org | ❌ | ❌ | ❌ | ❌ | ✅ |
+| READ org | ❌ | ❌ | ✅ | ✅ | ✅ |
+| UPDATE org | ❌ | ❌ | ❌ | ✅ | ✅ |
+| DELETE org | ❌ | ❌ | ❌ | ❌ | ✅ |
+| CREATE content-type | ❌ | ❌ | ✅ | ✅ | ✅ |
+| READ content-type | ✅ | ✅ | ✅ | ✅ | ✅ |
+| UPDATE content-type | ❌ | ❌ | ✅ | ✅ | ✅ |
+| DELETE content-type | ❌ | ❌ | ❌ | ✅ | ✅ |
+| CREATE entry | ❌ | ✅ | ✅ | ✅ | ✅ |
+| READ entry (own) | ❌ | ✅ | ✅ | ✅ | ✅ |
+| READ entry (others) | ✅ | ❌ | ✅ | ✅ | ✅ |
+| UPDATE entry (own) | ❌ | ✅ | ✅ | ✅ | ✅ |
+| UPDATE entry (others) | ❌ | ❌ | ✅ | ✅ | ✅ |
+| PUBLISH entry | ❌ | ❌ | ✅ | ✅ | ✅ |
+| DELETE entry | ❌ | ❌ | ✅ | ✅ | ✅ |
+| CREATE asset | ❌ | ✅ | ✅ | ✅ | ✅ |
+| READ asset | ✅ | ✅ | ✅ | ✅ | ✅ |
+| DELETE asset | ❌ | ❌ | ✅ | ✅ | ✅ |
+| CREATE webhook | ❌ | ❌ | ❌ | ✅ | ✅ |
+| UPDATE webhook | ❌ | ❌ | ❌ | ✅ | ✅ |
+| DELETE webhook | ❌ | ❌ | ❌ | ✅ | ✅ |
+
+### 4.2 Exemplos de Restrições de Negócio
+
+```
+1. Author não pode publicar
+   - Protege garantia de qualidade
+   - Força revisão por editorial team
+
+2. Author só vê próprias entries em draft
+   - Protege trabalho em progresso de outros
+   - Editar alheias: "UPDATE entry (others)" = editor+
+
+3. Viewer não pode criar nada
+   - Read-only access para stakeholders
+   - Recebem reportes automáticos
+
+4. Apenas Owner pode deletar organização
+   - Mudança crítica de negócio
+   - Previne acidentes
+
+5. Apenas Admin pode gerenciar webhooks
+   - Webhooks são críticos para integrações
+   - Requisitos de security/compliance
+```
+
+---
+
+## 5. Tratamento de Erros
+
+### 5.1 Cenários de Erro Comum
+
+#### Erro 1: Tentar publicar artigo sem imagem obrigatória
+```
+Action: PUT /v1/organizations/.../entries/.../publish
+Payload:
+{
+  "publish_immediately": true
+}
+
+Response: 422 Unprocessable Entity
+{
+  "status": "error",
+  "code": 422,
+  "message": "Validation failed",
+  "errors": [
+    {
+      "field": "featured_image",
+      "message": "Featured image is required",
+      "code": "REQUIRED_FIELD"
+    }
+  ]
+}
+
+Ação do User: Voltar, adicionar imagem, tentar novamente
+```
+
+#### Erro 2: Exceder limite de tags
+```
+Action: PUT /v1/organizations/.../entries/.../update
+Payload:
+{
+  "data": {
+    "tags": ["cms", "blog", "marketing", "seo", "headless", "api", "rest"]
+  }
+}
+
+Response: 422 Unprocessable Entity
+{
+  "status": "error",
+  "code": 422,
+  "message": "Validation failed",
+  "errors": [
+    {
+      "field": "tags",
+      "message": "Maximum 5 tags allowed",
+      "code": "MAX_ITEMS_EXCEEDED"
+    }
+  ]
+}
+
+Ação do User: Remover algumas tags, tentar novamente
+```
+
+#### Erro 3: Tentar deletar content-type com published entries
+```
+Action: DELETE /v1/organizations/.../content-types/{type_id}
+
+Response: 409 Conflict
+{
+  "status": "error",
+  "code": 409,
+  "message": "Cannot delete content type with published entries",
+  "details": {
+    "published_entries_count": 5,
+    "draft_entries_count": 2,
+    "suggestion": "Unpublish all entries first or delete them individually"
+  }
+}
+
+Ação do User: Unpublish entries ou deletar, então tentar novamente
+```
+
+#### Erro 4: Permissão insuficiente
+```
+Action: DELETE /v1/organizations/org_id/entries/entry_id
+(Usuário com role "viewer")
+
+Response: 403 Forbidden
+{
+  "status": "error",
+  "code": 403,
+  "message": "Insufficient permissions",
+  "required_permission": "entries:delete",
+  "your_permissions": ["entries:read"],
+  "suggestion": "Contact your organization admin to grant permission"
+}
+
+Ação do User: Contatar admin ou solicitar mudança de role
+```
+
+#### Erro 5: Asset muito grande
+```
+Action: POST /v1/organizations/org_id/assets
+File: video.mp4 (2.5GB)
+Organization plan: free
+
+Response: 413 Payload Too Large
+{
+  "status": "error",
+  "code": 413,
+  "message": "File size exceeds limit",
+  "details": {
+    "file_size": 2684354560,
+    "max_size_for_plan": 104857600,
+    "plan": "free",
+    "suggestion": "Upgrade to pro plan for larger files or compress video"
+  }
+}
+
+Ação do User: Comprimir arquivo ou fazer upgrade do plano
+```
+
+### 5.2 Retry Logic para Webhooks
+
+```
+Envio de Webhook:
+1ª Tentativa: 08:00 - Falha (timeout)
+Aguarda: 5 minutos (exponential backoff)
+
+2ª Tentativa: 08:05 - Falha (500 error)
+Aguarda: 10 minutos
+
+3ª Tentativa: 08:15 - Sucesso ✓
+
+Log registrado:
+{
+  "event": "entry.published",
+  "webhook_id": "webhook_001",
+  "attempts": 3,
+  "first_attempt": "2024-01-22T08:00:00Z",
+  "last_attempt": "2024-01-22T08:15:00Z",
+  "status": "success",
+  "response_code": 200
+}
+```
+
+### 5.3 Recovery Procedures
+
+```
+Se publicação falhar:
+1. Notificação enviada ao admin
+2. Entry volta para "scheduled"
+3. Retry automático em 1 hora
+4. Se falhar 3x: admin notificado com erro
+5. Manual retry disponível no dashboard
+
+Se asset corromper durante upload:
+1. Upload falha no meio
+2. Arquivo removido de S3
+3. Error message exibe para usuário
+4. Retry possível com novo arquivo
+
+Se webhook cair:
+1. Notificação em dashboard
+2. Retry automático (3 tentativas)
+3. Se falhar: admin pode reenviar manualmente
+4. Logs completos para debug
+```
+
+---
+
+**Documentação Completa de CRUD & Caso Real**  
+**Versão:** 1.0  
+**Última Atualização:** Janeiro 2026  
+**Status:** Pronto para Implementação
