@@ -7,8 +7,8 @@ import com.brazucacms.dto.user.UserResponse;
 import com.brazucacms.exception.BadRequestException;
 import com.brazucacms.exception.DuplicateResourceException;
 import com.brazucacms.exception.ResourceNotFoundException;
-import com.brazucacms.model.User;
-import com.brazucacms.repository.UserRepository;
+import com.brazucacms.model.*;
+import com.brazucacms.repository.*;
 import com.brazucacms.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
+import java.text.Normalizer;
 
 /**
  * Serviço de autenticação.
@@ -40,12 +42,18 @@ import java.time.LocalDateTime;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final CompanyRepository companyRepository;
+    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceMemberRepository workspaceMemberRepository;
+    private final SubscriptionPlanRepository subscriptionPlanRepository;
+    private final SubscriptionRepository subscriptionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthenticationManager authenticationManager;
 
     /**
      * Registra um novo usuário no sistema.
+     * Cria automaticamente uma empresa e workspace para o novo usuário.
      * 
      * @param request Dados de registro
      * @return AuthResponse com tokens e dados do usuário
@@ -58,28 +66,114 @@ public class AuthService {
             throw new DuplicateResourceException("Email já cadastrado: " + request.getEmail());
         }
 
+        // 1. Criar a empresa para o novo usuário
+        String companyName = request.getName() + "'s Company";
+        String companySlug = generateUniqueSlug(companyName, "company");
+        
+        Company company = Company.builder()
+                .name(companyName)
+                .slug(companySlug)
+                .description("Empresa de " + request.getName())
+                .plan(Company.CompanyPlan.STARTER)
+                .status(Company.CompanyStatus.ACTIVE)
+                .contactEmail(request.getEmail())
+                .build();
+        company = companyRepository.save(company);
+        log.info("Empresa criada: {} (ID: {})", company.getName(), company.getId());
+
+        // 2. Criar o usuário como COMPANY_OWNER
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(User.Role.USER)
+                .role(User.Role.COMPANY_OWNER)
+                .company(company)
                 .active(true)
                 .emailVerified(false)
                 .build();
+        user = userRepository.save(user);
+        log.info("Usuário registrado: {} (ID: {}) como COMPANY_OWNER", user.getEmail(), user.getId());
 
-        User savedUser = userRepository.save(user);
-        log.info("Usuário registrado: {} (ID: {})", savedUser.getEmail(), savedUser.getId());
+        // 3. Criar workspace padrão
+        String workspaceName = "Meu Projeto";
+        String workspaceSlug = generateUniqueSlug(workspaceName + "-" + user.getId(), "workspace");
+        
+        Workspace workspace = Workspace.builder()
+                .name(workspaceName)
+                .slug(workspaceSlug)
+                .description("Workspace principal de " + request.getName())
+                .company(company)
+                .owner(user)
+                .plan(Workspace.Plan.FREE)
+                .status(Workspace.WorkspaceStatus.ACTIVE)
+                .storageUsed(0L)
+                .storageLimit(1000L)
+                .build();
+        workspace = workspaceRepository.save(workspace);
+        log.info("Workspace criado: {} (ID: {})", workspace.getName(), workspace.getId());
+
+        // 4. Adicionar usuário como membro do workspace (ADMIN)
+        WorkspaceMember membership = WorkspaceMember.builder()
+                .workspace(workspace)
+                .user(user)
+                .role(WorkspaceMember.MemberRole.ADMIN)
+                .build();
+        workspaceMemberRepository.save(membership);
+
+        // 5. Criar assinatura gratuita (plano Starter)
+        SubscriptionPlan starterPlan = subscriptionPlanRepository.findByName("starter")
+                .orElse(null);
+        
+        if (starterPlan != null) {
+            Subscription subscription = Subscription.builder()
+                    .company(company)
+                    .plan(starterPlan)
+                    .status(Subscription.SubscriptionStatus.ACTIVE)
+                    .billingInterval(Subscription.BillingInterval.MONTHLY)
+                    .currentPeriodStart(LocalDateTime.now())
+                    .currentPeriodEnd(LocalDateTime.now().plusYears(100)) // Free plan never expires
+                    .cancelAtPeriodEnd(false)
+                    .build();
+            subscriptionRepository.save(subscription);
+            log.info("Assinatura Starter criada para empresa: {}", company.getName());
+        }
 
         // Gera tokens (sessão normal - 1 dia)
-        String accessToken = jwtTokenProvider.generateAccessToken(savedUser, false);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(savedUser, false);
+        String accessToken = jwtTokenProvider.generateAccessToken(user, false);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user, false);
 
         return AuthResponse.of(
                 accessToken,
                 refreshToken,
                 getExpirationSeconds(false),
-                UserResponse.fromEntity(savedUser)
+                UserResponse.fromEntity(user)
         );
+    }
+
+    /**
+     * Gera um slug único baseado no nome.
+     */
+    private String generateUniqueSlug(String name, String type) {
+        String baseSlug = Normalizer.normalize(name, Normalizer.Form.NFD)
+                .replaceAll("[^\\p{ASCII}]", "")
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-|-$", "");
+        
+        String slug = baseSlug;
+        int counter = 1;
+        
+        if ("company".equals(type)) {
+            while (companyRepository.existsBySlug(slug)) {
+                slug = baseSlug + "-" + counter++;
+            }
+        } else {
+            while (workspaceRepository.existsBySlug(slug)) {
+                slug = baseSlug + "-" + counter++;
+            }
+        }
+        
+        return slug;
     }
 
     /**
