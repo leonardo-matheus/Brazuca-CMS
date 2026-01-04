@@ -559,6 +559,8 @@ public class DataInitializer {
                 .description("Perfeito para projetos pessoais e pequenos sites.")
                 .priceMonthly(BigDecimal.ZERO)
                 .priceYearly(BigDecimal.ZERO)
+                .stripePriceIdMonthly("price_1Slx3UIrEucdbP0DagQS11j0")
+                .stripePriceIdYearly("price_1Slx3UIrEucdbP0DagQS11j0")
                 .maxProjects(1)
                 .maxUsers(3)
                 .maxApiRequests(10000L)
@@ -582,8 +584,8 @@ public class DataInitializer {
                 .description("Ideal para equipes e projetos em crescimento.")
                 .priceMonthly(new BigDecimal("99.00"))
                 .priceYearly(new BigDecimal("990.00"))
-                .stripePriceIdMonthly("price_pro_monthly") // Substitua pelo ID real do Stripe
-                .stripePriceIdYearly("price_pro_yearly")   // Substitua pelo ID real do Stripe
+                .stripePriceIdMonthly("price_1SlwlkIrEucdbP0DPNxfFDNW")
+                .stripePriceIdYearly("price_1SlwlkIrEucdbP0DWpAQJU8R")
                 .maxProjects(5)
                 .maxUsers(10)
                 .maxApiRequests(100000L)
@@ -607,8 +609,8 @@ public class DataInitializer {
                 .description("Para grandes organizações com necessidades avançadas.")
                 .priceMonthly(new BigDecimal("499.00"))
                 .priceYearly(new BigDecimal("4990.00"))
-                .stripePriceIdMonthly("price_enterprise_monthly") // Substitua pelo ID real do Stripe
-                .stripePriceIdYearly("price_enterprise_yearly")   // Substitua pelo ID real do Stripe
+                .stripePriceIdMonthly("price_1SlwmfIrEucdbP0DEIey5G9N")
+                .stripePriceIdYearly("price_1SlwmfIrEucdbP0D1vGdLi6Q")
                 .maxProjects(-1) // ilimitado
                 .maxUsers(-1)    // ilimitado
                 .maxApiRequests(-1L) // ilimitado
