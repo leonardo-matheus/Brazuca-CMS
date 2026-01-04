@@ -440,17 +440,17 @@ public class StripeService {
         return customer.getId();
     }
 
-    private Subscription.SubscriptionStatus mapStripeStatus(String status) {
+    private com.brazucacms.model.Subscription.SubscriptionStatus mapStripeStatus(String status) {
         return switch (status) {
-            case "active" -> Subscription.SubscriptionStatus.ACTIVE;
-            case "past_due" -> Subscription.SubscriptionStatus.PAST_DUE;
-            case "canceled" -> Subscription.SubscriptionStatus.CANCELED;
-            case "unpaid" -> Subscription.SubscriptionStatus.UNPAID;
-            case "trialing" -> Subscription.SubscriptionStatus.TRIALING;
-            case "incomplete" -> Subscription.SubscriptionStatus.INCOMPLETE;
-            case "incomplete_expired" -> Subscription.SubscriptionStatus.INCOMPLETE_EXPIRED;
-            case "paused" -> Subscription.SubscriptionStatus.PAUSED;
-            default -> Subscription.SubscriptionStatus.ACTIVE;
+            case "active" -> com.brazucacms.model.Subscription.SubscriptionStatus.ACTIVE;
+            case "past_due" -> com.brazucacms.model.Subscription.SubscriptionStatus.PAST_DUE;
+            case "canceled" -> com.brazucacms.model.Subscription.SubscriptionStatus.CANCELED;
+            case "unpaid" -> com.brazucacms.model.Subscription.SubscriptionStatus.UNPAID;
+            case "trialing" -> com.brazucacms.model.Subscription.SubscriptionStatus.TRIALING;
+            case "incomplete" -> com.brazucacms.model.Subscription.SubscriptionStatus.INCOMPLETE;
+            case "incomplete_expired" -> com.brazucacms.model.Subscription.SubscriptionStatus.INCOMPLETE_EXPIRED;
+            case "paused" -> com.brazucacms.model.Subscription.SubscriptionStatus.PAUSED;
+            default -> com.brazucacms.model.Subscription.SubscriptionStatus.ACTIVE;
         };
     }
 
