@@ -43,8 +43,22 @@ public class OpenAPIIntegrationService {
     @Transactional
     public Integration connectWithUrl(Long companyId, Long userId, IntegrationConnectRequest request) {
         try {
-            String specUrl = request.getCredentials().get("specUrl");
-            String specContent = request.getCredentials().get("specContent");
+            // Support both credentials and configuration for flexibility
+            String specUrl = null;
+            String specContent = null;
+            
+            if (request.getCredentials() != null) {
+                specUrl = request.getCredentials().get("specUrl");
+                specContent = request.getCredentials().get("specContent");
+            }
+            if (request.getConfiguration() != null) {
+                if (specUrl == null && request.getConfiguration().get("specUrl") != null) {
+                    specUrl = request.getConfiguration().get("specUrl").toString();
+                }
+                if (specContent == null && request.getConfiguration().get("specContent") != null) {
+                    specContent = request.getConfiguration().get("specContent").toString();
+                }
+            }
             
             // Parse and validate spec
             JsonNode openAPISpec;

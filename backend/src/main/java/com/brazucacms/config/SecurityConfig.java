@@ -50,6 +50,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/billing/plans").permitAll()
                         .requestMatchers("/api/social/instagram/oauth-url").permitAll()
                         
+                        // Integration OAuth URLs (public for redirects)
+                        .requestMatchers("/api/integrations/oauth/**").permitAll()
+                        .requestMatchers("/api/integrations/webhooks/**").permitAll()
+                        
                         // Swagger/OpenAPI
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         

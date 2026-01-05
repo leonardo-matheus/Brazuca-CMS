@@ -24,11 +24,13 @@ public interface SyncedProductRepository extends JpaRepository<SyncedProduct, Lo
 
     List<SyncedProduct> findByIntegrationId(Long integrationId);
 
-    @Query("SELECT p FROM SyncedProduct p WHERE p.companyId = :companyId AND p.cmsEntry IS NULL")
+    @Query("SELECT p FROM SyncedProduct p WHERE p.company.id = :companyId AND p.cmsEntry IS NULL")
     List<SyncedProduct> findUnsyncedByCompanyId(Long companyId);
 
+    @Query("SELECT COUNT(p) FROM SyncedProduct p WHERE p.company.id = :companyId")
     long countByCompanyId(Long companyId);
 
+    @Query("SELECT COUNT(p) FROM SyncedProduct p WHERE p.company.id = :companyId AND p.platform = :platform")
     long countByCompanyIdAndPlatform(Long companyId, Integration.Platform platform);
 
     void deleteByIntegrationId(Long integrationId);

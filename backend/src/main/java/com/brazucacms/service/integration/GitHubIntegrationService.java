@@ -35,10 +35,10 @@ public class GitHubIntegrationService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${integrations.github.client-id:}")
+    @Value("${integration.github.client-id:}")
     private String clientId;
 
-    @Value("${integrations.github.client-secret:}")
+    @Value("${integration.github.client-secret:}")
     private String clientSecret;
 
     private static final String GITHUB_API = "https://api.github.com";

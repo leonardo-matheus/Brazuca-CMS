@@ -20,6 +20,8 @@ import {
   Tag,
   Webhook,
   CreditCard,
+  Plug,
+  Workflow,
 } from 'lucide-react';
 import { useAuth, useAuthStore } from '@/stores/auth.store';
 
@@ -51,6 +53,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { href: '/dashboard/media', icon: Image, label: 'Biblioteca de Mídia' },
     { href: '/dashboard/tags', icon: Tag, label: 'Tags' },
     { href: '/dashboard/api-keys', icon: Key, label: 'Chaves de API' },
+    { href: '/dashboard/integrations', icon: Plug, label: 'Integrações' },
+    { href: '/dashboard/automations', icon: Workflow, label: 'Automações' },
   ];
 
   const managementLinks: SidebarLink[] = [

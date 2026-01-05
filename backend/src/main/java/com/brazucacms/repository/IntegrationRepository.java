@@ -29,6 +29,6 @@ public interface IntegrationRepository extends JpaRepository<Integration, Long> 
 
     List<Integration> findByCompanyIdAndPlatformIn(Long companyId, List<Integration.Platform> platforms);
     
-    @Query("SELECT DISTINCT i.platform FROM Integration i WHERE i.companyId = :companyId AND i.status = 'ACTIVE'")
+    @Query("SELECT DISTINCT i.platform FROM Integration i WHERE i.company.id = :companyId AND i.status = 'ACTIVE'")
     List<Integration.Platform> findActivePlatformsByCompanyId(Long companyId);
 }

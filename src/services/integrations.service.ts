@@ -96,7 +96,7 @@ class IntegrationsService {
   // ============ Platforms ============
   
   async getAvailablePlatforms(): Promise<Platform[]> {
-    const response = await apiClient.get('/integrations/platforms');
+    const response = await apiClient.get('/api/integrations/platforms');
     return response.data.data;
   }
 
@@ -104,26 +104,26 @@ class IntegrationsService {
   
   async getIntegrations(category?: string): Promise<Integration[]> {
     const params = category ? { category } : {};
-    const response = await apiClient.get('/integrations', { params });
+    const response = await apiClient.get('/api/integrations', { params });
     return response.data.data;
   }
 
   async getIntegration(id: number): Promise<Integration> {
-    const response = await apiClient.get(`/integrations/${id}`);
+    const response = await apiClient.get(`/api/integrations/${id}`);
     return response.data.data;
   }
 
   async connectIntegration(data: IntegrationConnectRequest): Promise<Integration> {
-    const response = await apiClient.post('/integrations/connect', data);
+    const response = await apiClient.post('/api/integrations/connect', data);
     return response.data.data;
   }
 
   async disconnectIntegration(id: number): Promise<void> {
-    await apiClient.delete(`/integrations/${id}`);
+    await apiClient.delete(`/api/integrations/${id}`);
   }
 
   async syncIntegration(id: number): Promise<Record<string, any>> {
-    const response = await apiClient.post(`/integrations/${id}/sync`);
+    const response = await apiClient.post(`/api/integrations/${id}/sync`);
     return response.data.data;
   }
 
@@ -131,38 +131,38 @@ class IntegrationsService {
   
   async getGitHubOAuthUrl(redirectUri: string, state?: string): Promise<string> {
     const params = { redirectUri, state: state || '' };
-    const response = await apiClient.get('/integrations/oauth/github', { params });
+    const response = await apiClient.get('/api/integrations/oauth/github', { params });
     return response.data.data.url;
   }
 
   async getShopifyOAuthUrl(shopDomain: string, redirectUri: string, state?: string): Promise<string> {
     const params = { shopDomain, redirectUri, state: state || '' };
-    const response = await apiClient.get('/integrations/oauth/shopify', { params });
+    const response = await apiClient.get('/api/integrations/oauth/shopify', { params });
     return response.data.data.url;
   }
 
   async getAuth0OAuthUrl(domain: string | undefined, redirectUri: string, state?: string): Promise<string> {
     const params = { domain, redirectUri, state: state || '' };
-    const response = await apiClient.get('/integrations/oauth/auth0', { params });
+    const response = await apiClient.get('/api/integrations/oauth/auth0', { params });
     return response.data.data.url;
   }
 
   // ============ Platform-Specific ============
 
   async getGitHubRepos(integrationId: number): Promise<any[]> {
-    const response = await apiClient.get(`/integrations/github/${integrationId}/repos`);
+    const response = await apiClient.get(`/api/integrations/github/${integrationId}/repos`);
     return response.data.data;
   }
 
   async getShopifyProducts(integrationId: number, page = 0, size = 20): Promise<{ content: SyncedProduct[]; totalElements: number }> {
-    const response = await apiClient.get(`/integrations/shopify/${integrationId}/products`, {
+    const response = await apiClient.get(`/api/integrations/shopify/${integrationId}/products`, {
       params: { page, size }
     });
     return response.data.data;
   }
 
   async getKlaviyoLists(integrationId: number): Promise<any[]> {
-    const response = await apiClient.get(`/integrations/klaviyo/${integrationId}/lists`);
+    const response = await apiClient.get(`/api/integrations/klaviyo/${integrationId}/lists`);
     return response.data.data;
   }
 
@@ -170,38 +170,38 @@ class IntegrationsService {
 
   async getWorkflows(status?: string): Promise<Workflow[]> {
     const params = status ? { status } : {};
-    const response = await apiClient.get('/integrations/workflows', { params });
+    const response = await apiClient.get('/api/integrations/workflows', { params });
     return response.data.data;
   }
 
   async createWorkflow(data: WorkflowCreateRequest): Promise<Workflow> {
-    const response = await apiClient.post('/integrations/workflows', data);
+    const response = await apiClient.post('/api/integrations/workflows', data);
     return response.data.data;
   }
 
   async activateWorkflow(id: number): Promise<Workflow> {
-    const response = await apiClient.post(`/integrations/workflows/${id}/activate`);
+    const response = await apiClient.post(`/api/integrations/workflows/${id}/activate`);
     return response.data.data;
   }
 
   async pauseWorkflow(id: number): Promise<Workflow> {
-    const response = await apiClient.post(`/integrations/workflows/${id}/pause`);
+    const response = await apiClient.post(`/api/integrations/workflows/${id}/pause`);
     return response.data.data;
   }
 
   async executeWorkflow(id: number, triggerData?: Record<string, any>): Promise<Record<string, any>> {
-    const response = await apiClient.post(`/integrations/workflows/${id}/execute`, triggerData || {});
+    const response = await apiClient.post(`/api/integrations/workflows/${id}/execute`, triggerData || {});
     return response.data.data;
   }
 
   async deleteWorkflow(id: number): Promise<void> {
-    await apiClient.delete(`/integrations/workflows/${id}`);
+    await apiClient.delete(`/api/integrations/workflows/${id}`);
   }
 
   // ============ Stats ============
 
   async getStats(): Promise<IntegrationStats> {
-    const response = await apiClient.get('/integrations/stats');
+    const response = await apiClient.get('/api/integrations/stats');
     return response.data.data;
   }
 }
